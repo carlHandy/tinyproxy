@@ -1,0 +1,12 @@
+vhosts:
+  example.com:
+    port: 80
+    root: /var/www/example
+    compression: true
+
+  api.example.com:
+    port: 443
+    proxy_pass: http://localhost:3000
+    ssl: true
+    cert_file: /etc/certs/api.crt
+    key_file: /etc/certs/api.key
