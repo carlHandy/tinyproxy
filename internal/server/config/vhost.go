@@ -6,18 +6,18 @@ import (
 
 type SecurityConfig struct {
     Headers struct {
-        FrameOptions   string `yaml:"frame_options"`
-        ContentType    string `yaml:"content_type"`
-        XSSProtection string `yaml:"xss_protection"`
-        CSP           string `yaml:"csp"`
-        HSTS          string `yaml:"hsts"`
-    } `yaml:"headers"`
+        FrameOptions   string
+        ContentType    string 
+        XSSProtection string 
+        CSP           string 
+        HSTS          string 
+    }
     RateLimit struct {
-        Requests int           `yaml:"requests"`
-        Window   time.Duration `yaml:"window"`
-        Enabled  bool          `yaml:"enabled"`
-    } `yaml:"rate_limit"`
-    MaxBodySize int64 `yaml:"max_body_size"`
+        Requests int           
+        Window   time.Duration 
+        Enabled  bool          
+    }
+    MaxBodySize int64 
 }
 
 type VirtualHost struct {
@@ -28,15 +28,15 @@ type VirtualHost struct {
     SSL         bool
     CertFile    string
     KeyFile     string
-    Compression bool `yaml:"compression" default:"true"`
-    Security    SecurityConfig `yaml:"security"`
+    Compression bool 
+    Security    SecurityConfig 
     // Add SOCKS5 configuration
     SOCKS5 struct {
-        Enabled  bool   `yaml:"enabled"`
-        Address  string `yaml:"address"`
-        Username string `yaml:"username"`
-        Password string `yaml:"password"`
-    } `yaml:"socks5"`
+        Enabled  bool   
+        Address  string 
+        Username string 
+        Password string 
+    }
 }
 
 func NewVirtualHost() *VirtualHost {
@@ -44,11 +44,11 @@ func NewVirtualHost() *VirtualHost {
         Compression: true,
         Security: SecurityConfig{
             Headers: struct {
-                FrameOptions   string `yaml:"frame_options"`
-                ContentType    string `yaml:"content_type"`
-                XSSProtection string `yaml:"xss_protection"`
-                CSP           string `yaml:"csp"`
-                HSTS          string `yaml:"hsts"`
+                FrameOptions   string 
+                ContentType    string 
+                XSSProtection string 
+                CSP           string 
+                HSTS          string 
             }{
                 FrameOptions:   "SAMEORIGIN",
                 ContentType:    "nosniff",
@@ -57,9 +57,9 @@ func NewVirtualHost() *VirtualHost {
                 HSTS:          "max-age=31536000; includeSubDomains",
             },
             RateLimit: struct {
-                Requests int           `yaml:"requests"`
-                Window   time.Duration `yaml:"window"`
-                Enabled  bool          `yaml:"enabled"`
+                Requests int           
+                Window   time.Duration
+                Enabled  bool         
             }{
                 Enabled:  true,
                 Requests: 100,
@@ -68,10 +68,10 @@ func NewVirtualHost() *VirtualHost {
             MaxBodySize: 10 << 20, // 10MB default max body size
         },
         SOCKS5: struct {
-            Enabled  bool   `yaml:"enabled"`
-            Address  string `yaml:"address"`
-            Username string `yaml:"username"`
-            Password string `yaml:"password"`
+            Enabled  bool   
+            Address  string 
+            Username string 
+            Password string 
         }{
             Enabled:  false,
             Address:  "127.0.0.1:1080",
@@ -99,11 +99,11 @@ func NewServerConfig() *ServerConfig {
         Root: "static",
         Security: SecurityConfig{
             Headers: struct {
-                FrameOptions   string `yaml:"frame_options"`
-                ContentType    string `yaml:"content_type"`
-                XSSProtection string `yaml:"xss_protection"`
-                CSP           string `yaml:"csp"`
-                HSTS          string `yaml:"hsts"`
+                FrameOptions   string 
+                ContentType    string 
+                XSSProtection string 
+                CSP           string 
+                HSTS          string 
             }{
                 FrameOptions:   "SAMEORIGIN",
                 ContentType:    "nosniff",
@@ -112,9 +112,9 @@ func NewServerConfig() *ServerConfig {
                 HSTS:          "max-age=31536000; includeSubDomains",
             },
             RateLimit: struct {
-                Requests int           `yaml:"requests"`
-                Window   time.Duration `yaml:"window"`
-                Enabled  bool          `yaml:"enabled"`
+                Requests int           
+                Window   time.Duration 
+                Enabled  bool          
             }{
                 Enabled:  true,
                 Requests: 100,
