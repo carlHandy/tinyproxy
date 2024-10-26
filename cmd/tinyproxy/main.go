@@ -75,7 +75,14 @@ func (vh *VHostHandler) handleDefaultVHost(w http.ResponseWriter, r *http.Reques
 }
 
 func main() {
-    config, err := config.LoadConfig("config/vhosts.yaml")
+    configFile, err := os.Open("config/vhosts.conf")
+    if err != nil {
+        panic(err)
+    }
+    defer configFile.Close()
+
+    parser := config.NewParser(configFile)
+    config, err := parser.Parse()
     if err != nil {
         panic(err)
     }
