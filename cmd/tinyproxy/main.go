@@ -2,11 +2,13 @@ package main
 
 import (
     "fmt"
-    "net"
+    "os"
     "net/http"
     "tinyproxy/internal/server/compression"
     "tinyproxy/internal/server/config"
     "tinyproxy/internal/server/proxy"
+    "tinyproxy/internal/server/security"
+    "tinyproxy/internal/server/security/certmanager"
 )
 
 type VHostHandler struct {
@@ -17,19 +19,34 @@ func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
     host := r.Host
     vhost, exists := vh.config.VHosts[host]
     if !exists {
-        // Use default vhost for unmatched domains
         vhost = vh.config.VHosts["default"]
-        w.Header().Set("Content-Type", "text/html")
-        fmt.Fprintf(w, "<h1>Welcome to TinyProxy</h1><p>Your server is running successfully!</p>")
-        return
     }
-    
+
+    // Set security headers
+    vh.setSecurityHeaders(w, vhost)
+
+    // Select handler based on host
+    handler := vh.handleVHost
+    if !exists {
+        handler = vh.handleDefaultVHost
+    }
+
+    // Apply compression if enabled
     if vhost.Compression {
-        compression.Compress(vh.handleVHost)(w, r)
+        compression.Compress(handler)(w, r)
         return
     }
-    vh.handleVHost(w, r)
+    handler(w, r)
 }
+
+func (vh *VHostHandler) setSecurityHeaders(w http.ResponseWriter, vhost *config.VirtualHost) {
+    w.Header().Set("X-Frame-Options", vhost.Security.Headers.FrameOptions)
+    w.Header().Set("X-Content-Type-Options", vhost.Security.Headers.ContentType)
+    w.Header().Set("X-XSS-Protection", vhost.Security.Headers.XSSProtection)
+    w.Header().Set("Content-Security-Policy", vhost.Security.Headers.CSP)
+    w.Header().Set("Strict-Transport-Security", vhost.Security.Headers.HSTS)
+}
+
 func (vh *VHostHandler) handleVHost(w http.ResponseWriter, r *http.Request) {
     vhost := vh.config.VHosts[r.Host]
     if vhost.ProxyPass != "" {
@@ -44,6 +61,10 @@ func (vh *VHostHandler) handleVHost(w http.ResponseWriter, r *http.Request) {
     http.FileServer(http.Dir(vhost.Root)).ServeHTTP(w, r)
 }
 
+func (vh *VHostHandler) handleDefaultVHost(w http.ResponseWriter, r *http.Request) {
+    http.ServeFile(w, r, "static/index.html")
+}
+
 func main() {
     config, err := config.LoadConfig("config/vhosts.yaml")
     if err != nil {
@@ -51,16 +72,31 @@ func main() {
     }
 
     handler := &VHostHandler{config: config}
+    
+    // Base server config
     server := &http.Server{
-        Addr:    ":8080",
         Handler: handler,
     }
 
-    ln, err := net.Listen("tcp", server.Addr)
-    if err != nil {
-        panic(err)
+    if os.Getenv("ENV") == "dev" {
+        server.Addr = ":8080"
+        server.TLSConfig = security.SecureTLSConfig()
+        fmt.Printf("Development mode: Listening on %s\n", server.Addr)
+        if err := server.ListenAndServeTLS("certs/localhost+2.pem", "certs/localhost+2-key.pem"); err != nil {
+            panic(err)
+        }
+        return
     }
 
-    fmt.Printf("Listening on %s\n", server.Addr)
-    server.Serve(ln)
+    // Production settings
+    server.Addr = ":443"
+    server.TLSConfig = certmanager.GetTLSConfig(config)
+    
+    // HTTP to HTTPS redirect
+    go http.ListenAndServe(":80", certmanager.GetHTTPHandler(config))
+
+    fmt.Printf("Production mode: Listening on %s\n", server.Addr)
+    if err := server.ListenAndServeTLS("", ""); err != nil {
+        panic(err)
+    }
 }
