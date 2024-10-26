@@ -88,10 +88,14 @@ func main() {
     }
 
     handler := &VHostHandler{config: config}
+    rateLimitedHandler := security.RateLimit(
+        config.VHosts["default"].RateLimit.Requests, 
+        config.VHosts["default"].RateLimit.Window,
+    )(handler)
     
     // Base server config
     server := &http.Server{
-        Handler: handler,
+        Handler: rateLimitedHandler,
     }
 
     if os.Getenv("ENV") == "dev" {
