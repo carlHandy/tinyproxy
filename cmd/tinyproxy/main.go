@@ -52,9 +52,9 @@ func (vh *VHostHandler) handleVHost(w http.ResponseWriter, r *http.Request) {
     if vhost.ProxyPass != "" {
         vhosts := []proxy.VHost{
             {
-                Domain:     "localhost:8080",  // or your domain
-                TargetURL:  vhost.ProxyPass,   // your existing targetURL
-                Socks5Addr: "127.0.0.1:1080",  // your SOCKS5 proxy address
+                Domain:     r.Host
+                TargetURL:  vhost.ProxyPass,
+                Socks5Addr: vhost.Socks5Addr.Address
             },
         }
 
