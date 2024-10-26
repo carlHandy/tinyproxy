@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
+
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome to Tiny Proxy!</title>
     <style>
         body {
@@ -9,26 +11,39 @@
             max-width: 800px;
             padding: 20px;
             line-height: 1.6;
+            text-align: center;
         }
+
         h1 {
             color: #333;
             text-align: center;
         }
+
         .container {
             background-color: #f5f5f5;
             border-radius: 5px;
             padding: 20px;
             margin-top: 20px;
+            text-align: center;
         }
+
         .info {
             color: #666;
+        }
+
+        ul {
+            display: inline-block;
             text-align: center;
+            margin: 20px auto;
+            list-style-position: inside;
+            padding-left: 0;
         }
     </style>
 </head>
+
 <body>
     <h1>Tiny Proxy Default Vhost</h1>
-    <div class="container">
+    <div>
         <p class="info">This is the default virtual host page. If you're seeing this, it means:</p>
         <ul>
             <li>The web server is running correctly</li>
@@ -38,4 +53,5 @@
         <p class="info">To configure a different site, please set up the appropriate virtual host configuration.</p>
     </div>
 </body>
+
 </html>

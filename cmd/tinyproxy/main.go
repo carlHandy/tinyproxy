@@ -62,6 +62,7 @@ func (vh *VHostHandler) handleVHost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (vh *VHostHandler) handleDefaultVHost(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "text/html")
     http.ServeFile(w, r, "static/index.html")
 }
 
