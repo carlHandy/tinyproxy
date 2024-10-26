@@ -22,23 +22,30 @@ func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         vhost = vh.config.VHosts["default"]
     }
 
-    // Set security headers
-    vh.setSecurityHeaders(w, vhost)
+    // Create rate limiter specific to this vhost
+    rateLimitedHandler := security.RateLimit(
+        vhost.Security.RateLimit.Requests,
+        vhost.Security.RateLimit.Window,
+    )(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // Set security headers
+        vh.setSecurityHeaders(w, vhost)
 
-    // Select handler based on host
-    handler := vh.handleVHost
-    if !exists {
-        handler = vh.handleDefaultVHost
-    }
+        // Select handler based on host
+        handler := vh.handleVHost
+        if !exists {
+            handler = vh.handleDefaultVHost
+        }
 
-    // Apply compression if enabled
-    if vhost.Compression {
-        compression.Compress(handler)(w, r)
-        return
-    }
-    handler(w, r)
+        // Apply compression if enabled
+        if vhost.Compression {
+            compression.Compress(handler)(w, r)
+            return
+        }
+        handler(w, r)
+    }))
+
+    rateLimitedHandler.ServeHTTP(w, r)
 }
-
 func (vh *VHostHandler) setSecurityHeaders(w http.ResponseWriter, vhost *config.VirtualHost) {
     w.Header().Set("X-Frame-Options", vhost.Security.Headers.FrameOptions)
     w.Header().Set("X-Content-Type-Options", vhost.Security.Headers.ContentType)

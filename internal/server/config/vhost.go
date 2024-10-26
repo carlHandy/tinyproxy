@@ -96,6 +96,7 @@ func NewServerConfig() *ServerConfig {
         Hostname:    "_",
         Port:        80, // Will handle both 80 and 443
         Compression: true,
+        Root: "static",
         Security: SecurityConfig{
             Headers: struct {
                 FrameOptions   string `yaml:"frame_options"`
