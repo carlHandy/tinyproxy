@@ -24,7 +24,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	server := &http.Server{
 		Addr:    ":8080",
-		Handler: http.HandlerFunc(compression.Gzip(handler)),
+		Handler: http.HandlerFunc(compression.Compress(handler)),
 	}
 
 	ln, err := net.Listen("tcp", server.Addr)
