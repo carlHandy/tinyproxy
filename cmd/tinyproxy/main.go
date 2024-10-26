@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"tinyproxy/internal/server/compression"
 )
 
 var bufPool = sync.Pool{
@@ -21,16 +22,16 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	serverr := &http.Server{
-		Addr: ":8080",
-		Handler: http.HandlerFunc(handler),
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: http.HandlerFunc(compression.Gzip(handler)),
 	}
 
-	ln, err := net.Listen("tcp", serverr.Addr)
+	ln, err := net.Listen("tcp", server.Addr)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("Listening on %s\n", serverr.Addr)
-	serverr.Serve(ln)
+	fmt.Printf("Listening on %s\n", server.Addr)
+	server.Serve(ln)
 }
