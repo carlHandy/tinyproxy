@@ -13,9 +13,9 @@ type SecurityConfig struct {
         HSTS          string 
     }
     RateLimit struct {
+        Enabled  bool
         Requests int           
         Window   time.Duration 
-        Enabled  bool          
     }
     MaxBodySize int64 
 }
@@ -29,13 +29,20 @@ type VirtualHost struct {
     CertFile    string
     KeyFile     string
     Compression bool 
-    Security    SecurityConfig 
+    Security    SecurityConfig
+    MaxBodySize int64
     // Add SOCKS5 configuration
     SOCKS5 struct {
         Enabled  bool   
         Address  string 
         Username string 
         Password string 
+    }
+    FastCGI struct {
+        Enabled  bool
+        Pass     string // e.g. "127.0.0.1:9000"
+        Index    string // e.g. "index.php"
+        Params   map[string]string
     }
 }
 
@@ -53,31 +60,21 @@ func NewVirtualHost() *VirtualHost {
                 FrameOptions:   "SAMEORIGIN",
                 ContentType:    "nosniff",
                 XSSProtection: "1; mode=block",
-                CSP:           "default-src 'self'",
+                CSP:           "",
                 HSTS:          "max-age=31536000; includeSubDomains",
             },
             RateLimit: struct {
+                Enabled  bool
                 Requests int           
                 Window   time.Duration
-                Enabled  bool         
             }{
                 Enabled:  true,
                 Requests: 100,
                 Window:   time.Minute,
             },
-            MaxBodySize: 10 << 20, // 10MB default max body size
         },
-        SOCKS5: struct {
-            Enabled  bool   
-            Address  string 
-            Username string 
-            Password string 
-        }{
-            Enabled:  false,
-            Address:  "127.0.0.1:1080",
-            Username: "",
-            Password: "",
-        },
+        MaxBodySize: 10 << 20, // 10MB default max body size
+
     }
     return vh
 }
@@ -112,9 +109,9 @@ func NewServerConfig() *ServerConfig {
                 HSTS:          "max-age=31536000; includeSubDomains",
             },
             RateLimit: struct {
+                Enabled  bool
                 Requests int           
                 Window   time.Duration 
-                Enabled  bool          
             }{
                 Enabled:  true,
                 Requests: 100,
@@ -123,7 +120,7 @@ func NewServerConfig() *ServerConfig {
             MaxBodySize: 10 << 20,
         },
         SOCKS5: struct {
-            Enabled  bool   
+            Enabled  bool
             Address  string 
             Username string 
             Password string 

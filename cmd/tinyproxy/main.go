@@ -9,6 +9,7 @@ import (
     "tinyproxy/internal/server/proxy"
     "tinyproxy/internal/server/security"
     "tinyproxy/internal/server/security/certmanager"
+    "tinyproxy/internal/fastcgi"
 )
 
 type VHostHandler struct {
@@ -43,7 +44,6 @@ func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         }
         handler(w, r)
     }))
-
     rateLimitedHandler.ServeHTTP(w, r)
 }
 func (vh *VHostHandler) setSecurityHeaders(w http.ResponseWriter, vhost *config.VirtualHost) {
@@ -56,6 +56,12 @@ func (vh *VHostHandler) setSecurityHeaders(w http.ResponseWriter, vhost *config.
 
 func (vh *VHostHandler) handleVHost(w http.ResponseWriter, r *http.Request) {
     vhost := vh.config.VHosts[r.Host]
+    
+    if vhost.FastCGI.Pass != "" {
+        fastcgi.Handler(w, r, vhost.FastCGI.Pass, vhost.Root, vhost.FastCGI.Index)
+        return
+    }
+
     if vhost.ProxyPass != "" {
         vhosts := []proxy.VHost{
             {
@@ -64,13 +70,12 @@ func (vh *VHostHandler) handleVHost(w http.ResponseWriter, r *http.Request) {
                 Socks5Addr: vhost.SOCKS5.Address,
             },
         }
-
         reverseProxy, err := proxy.NewReverseProxy(vhosts)
         if err != nil {
             http.Error(w, "Proxy configuration error", http.StatusInternalServerError)
             return
         }
-        http.Handle("/", reverseProxy)
+        reverseProxy.ServeHTTP(w, r)
         return
     }
     http.FileServer(http.Dir(vhost.Root)).ServeHTTP(w, r)

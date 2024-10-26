@@ -117,10 +117,43 @@ func (p *Parser) parseLine(line string) error {
         return p.parseSecurity()
     case "socks5":
         return p.parseSocks5()
+    case "fastcgi":
+        return p.parseFastCGI()
     }
 
     return nil
 }
+
+func (p *Parser) parseFastCGI() error {
+    p.currentVHost.FastCGI.Enabled = p.currentVHost.FastCGI.Pass != ""
+    p.currentVHost.FastCGI.Params = make(map[string]string)
+    for p.scanner.Scan() {
+        p.line++
+        line := strings.TrimSpace(p.scanner.Text())
+        
+        if line == "}" {
+            return nil
+        }
+        
+        parts := strings.Fields(line)
+        if len(parts) < 2 {
+            continue
+        }
+        
+        switch parts[0] {
+        case "pass":
+            p.currentVHost.FastCGI.Pass = parts[1]
+        case "index":
+            p.currentVHost.FastCGI.Index = parts[1]
+        case "param":
+            if len(parts) >= 3 {
+                p.currentVHost.FastCGI.Params[parts[1]] = parts[2]
+            }
+        }
+    }
+    return nil
+}
+
 func (p *Parser) parseSSL() error {
     for p.scanner.Scan() {
         p.line++
@@ -215,7 +248,7 @@ func (p *Parser) parseRateLimit() error {
             }
             p.currentVHost.Security.RateLimit.Window = window
         case "enabled":
-            p.currentVHost.Security.RateLimit.Enabled = parts[1] == "true"
+            p.currentVHost.Security.RateLimit.Enabled = p.currentVHost.Security.RateLimit.Requests != 0
         }
     }
     return nil
