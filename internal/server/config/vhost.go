@@ -30,9 +30,17 @@ type VirtualHost struct {
     KeyFile     string
     Compression bool `yaml:"compression" default:"true"`
     Security    SecurityConfig `yaml:"security"`
+    // Add SOCKS5 configuration
+    SOCKS5 struct {
+        Enabled  bool   `yaml:"enabled"`
+        Address  string `yaml:"address"`
+        Username string `yaml:"username"`
+        Password string `yaml:"password"`
+    } `yaml:"socks5"`
 }
+
 func NewVirtualHost() *VirtualHost {
-    return &VirtualHost{
+    vh := &VirtualHost{
         Compression: true,
         Security: SecurityConfig{
             Headers: struct {
@@ -59,8 +67,21 @@ func NewVirtualHost() *VirtualHost {
             },
             MaxBodySize: 10 << 20, // 10MB default max body size
         },
+        SOCKS5: struct {
+            Enabled  bool   `yaml:"enabled"`
+            Address  string `yaml:"address"`
+            Username string `yaml:"username"`
+            Password string `yaml:"password"`
+        }{
+            Enabled:  false,
+            Address:  "127.0.0.1:1080",
+            Username: "",
+            Password: "",
+        },
     }
+    return vh
 }
+
 type ServerConfig struct {
     VHosts map[string]*VirtualHost
 }

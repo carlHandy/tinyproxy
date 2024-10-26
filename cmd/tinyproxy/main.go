@@ -50,12 +50,20 @@ func (vh *VHostHandler) setSecurityHeaders(w http.ResponseWriter, vhost *config.
 func (vh *VHostHandler) handleVHost(w http.ResponseWriter, r *http.Request) {
     vhost := vh.config.VHosts[r.Host]
     if vhost.ProxyPass != "" {
-        proxy, err := proxy.NewReverseProxy(vhost.ProxyPass)
+        vhosts := []proxy.VHost{
+            {
+                Domain:     "localhost:8080",  // or your domain
+                TargetURL:  vhost.ProxyPass,   // your existing targetURL
+                Socks5Addr: "127.0.0.1:1080",  // your SOCKS5 proxy address
+            },
+        }
+
+        reverseProxy, err := proxy.NewReverseProxy(vhosts)
         if err != nil {
             http.Error(w, "Proxy configuration error", http.StatusInternalServerError)
             return
         }
-        proxy.ServeHTTP(w, r)
+        http.Handle("/", reverseProxy)
         return
     }
     http.FileServer(http.Dir(vhost.Root)).ServeHTTP(w, r)
@@ -67,7 +75,14 @@ func (vh *VHostHandler) handleDefaultVHost(w http.ResponseWriter, r *http.Reques
 }
 
 func main() {
-    config, err := config.LoadConfig("config/vhosts.yaml")
+    configFile, err := os.Open("config/vhosts.conf")
+    if err != nil {
+        panic(err)
+    }
+    defer configFile.Close()
+
+    parser := config.NewParser(configFile)
+    config, err := parser.Parse()
     if err != nil {
         panic(err)
     }

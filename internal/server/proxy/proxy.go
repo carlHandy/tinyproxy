@@ -6,28 +6,43 @@ import (
     "net/url"
 )
 
-type ReverseProxy struct {
-    target *url.URL
-    proxy  *httputil.ReverseProxy
+type VHost struct {
+    Domain     string
+    TargetURL  string
+    Socks5Addr string
 }
 
-func NewReverseProxy(targetURL string) (*ReverseProxy, error) {
-    target, err := url.Parse(targetURL)
-    if err != nil {
-        return nil, err
+type ReverseProxy struct {
+    vhosts map[string]*httputil.ReverseProxy
+}
+
+func NewReverseProxy(vhosts []VHost) (*ReverseProxy, error) {
+    proxyMap := make(map[string]*httputil.ReverseProxy)
+    
+    for _, vh := range vhosts {
+        target, err := url.Parse(vh.TargetURL)
+        if err != nil {
+            return nil, err
+        }
+        
+        proxy := httputil.NewSingleHostReverseProxy(target)
+        proxyMap[vh.Domain] = proxy
     }
 
     return &ReverseProxy{
-        target: target,
-        proxy:  httputil.NewSingleHostReverseProxy(target),
+        vhosts: proxyMap,
     }, nil
 }
 
+// ServeHTTP implements the http.Handler interface
 func (rp *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-    r.URL.Host = rp.target.Host
-    r.URL.Scheme = rp.target.Scheme
-    r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
-    r.Host = rp.target.Host
+    host := r.Host
+    
+    proxy, exists := rp.vhosts[host]
+    if !exists {
+        http.Error(w, "Virtual host not found", http.StatusNotFound)
+        return
+    }
 
-    rp.proxy.ServeHTTP(w, r)
+    proxy.ServeHTTP(w, r)
 }
