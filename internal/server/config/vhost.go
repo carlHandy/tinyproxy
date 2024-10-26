@@ -122,6 +122,17 @@ func NewServerConfig() *ServerConfig {
             },
             MaxBodySize: 10 << 20,
         },
+        SOCKS5: struct {
+            Enabled  bool   
+            Address  string 
+            Username string 
+            Password string 
+        }{
+            Enabled:  true,
+            Address:  "127.0.0.1:1080",
+            Username: "",
+            Password: "",
+        },
     }
     
     // Add the same vhost config for both default hostnames
