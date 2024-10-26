@@ -52,9 +52,9 @@ func (vh *VHostHandler) handleVHost(w http.ResponseWriter, r *http.Request) {
     if vhost.ProxyPass != "" {
         vhosts := []proxy.VHost{
             {
-                Domain:     r.Host
+                Domain:     r.Host,
                 TargetURL:  vhost.ProxyPass,
-                Socks5Addr: vhost.Socks5Addr.Address
+                Socks5Addr: vhost.SOCKS5.Address,
             },
         }
 
@@ -89,8 +89,8 @@ func main() {
 
     handler := &VHostHandler{config: config}
     rateLimitedHandler := security.RateLimit(
-        config.VHosts["default"].RateLimit.Requests, 
-        config.VHosts["default"].RateLimit.Window,
+        config.VHosts["default"].Security.RateLimit.Requests,
+        config.VHosts["default"].Security.RateLimit.Window,
     )(handler)
     
     // Base server config
