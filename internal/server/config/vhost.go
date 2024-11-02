@@ -91,7 +91,7 @@ func NewServerConfig() *ServerConfig {
     // Add default vhost for both HTTP and HTTPS
     defaultVHost := &VirtualHost{
         Hostname:    "_",
-        Port:        80, // Will handle both 80 and 443
+        Port:        8080, // Will handle both 80 and 443
         Compression: true,
         Root: "static",
         Security: SecurityConfig{
