@@ -8,6 +8,7 @@ import (
     "tinyproxy/internal/server/config"
     "tinyproxy/internal/server/proxy"
     "tinyproxy/internal/server/security"
+    "tinyproxy/internal/server/middleware"
     "tinyproxy/internal/server/security/certmanager"
     "tinyproxy/internal/fastcgi"
 )
