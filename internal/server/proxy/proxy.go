@@ -54,7 +54,6 @@ func NewReverseProxy(vhosts []VHost) (*ReverseProxy, error) {
 			if ip, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
 				req.Header.Set("X-Real-IP", ip)
 			}
-			// X-Forwarded-For is already set by ReverseProxy
 		}
  
 		proxyMap[vh.Domain] = p
