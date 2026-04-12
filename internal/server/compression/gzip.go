@@ -60,8 +60,10 @@ func (w *compressedResponseWriter) Write(b []byte) (int, error) {
 			// Keep buffering — we'll flush in Close()
 			return len(b), nil
 		}
-		// We have enough to decide
+		// We have enough to decide. b is already in w.buf and will be
+		// flushed inside decide() — do not write it again below.
 		w.decide()
+		return len(b), nil
 	}
 	return w.write(b)
 }

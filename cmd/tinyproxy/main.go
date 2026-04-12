@@ -1,9 +1,12 @@
 package main
 
 import (
+    "crypto/tls"
     "fmt"
-    "os"
+    "net"
     "net/http"
+    "os"
+    "time"
     "tinyproxy/internal/server/botdetect"
     "tinyproxy/internal/server/compression"
     "tinyproxy/internal/server/config"
@@ -12,6 +15,61 @@ import (
     "tinyproxy/internal/server/security/certmanager"
     "tinyproxy/internal/fastcgi"
 )
+
+// peekedConn replays a single already-read byte before delegating to the real connection.
+type peekedConn struct {
+    net.Conn
+    b    []byte
+    done bool
+}
+
+func (c *peekedConn) Read(buf []byte) (int, error) {
+    if !c.done && len(c.b) > 0 {
+        c.done = true
+        n := copy(buf, c.b)
+        return n, nil
+    }
+    return c.Conn.Read(buf)
+}
+
+// sniffingListener accepts TCP connections and dispatches them based on the first byte:
+// TLS ClientHello (0x16) → upgrade to TLS; anything else → HTTP redirect response.
+type sniffingListener struct {
+    inner  net.Listener
+    tlsCfg *tls.Config
+}
+
+func (l *sniffingListener) Accept() (net.Conn, error) {
+    for {
+        conn, err := l.inner.Accept()
+        if err != nil {
+            return nil, err
+        }
+
+        b := make([]byte, 1)
+        conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+        _, err = conn.Read(b)
+        conn.SetReadDeadline(time.Time{})
+        if err != nil {
+            conn.Close()
+            continue
+        }
+
+        peeked := &peekedConn{Conn: conn, b: b}
+
+        if b[0] == 0x16 {
+            // TLS ClientHello — wrap in TLS and let net/http handle the handshake.
+            return tls.Server(peeked, l.tlsCfg), nil
+        }
+
+        // Plain HTTP — send a redirect and loop to accept the next connection.
+        fmt.Fprint(peeked, "HTTP/1.1 301 Moved Permanently\r\nLocation: https://localhost:8080\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        peeked.Close()
+    }
+}
+
+func (l *sniffingListener) Close() error   { return l.inner.Close() }
+func (l *sniffingListener) Addr() net.Addr { return l.inner.Addr() }
 
 type VHostHandler struct {
     config *config.ServerConfig
@@ -117,10 +175,20 @@ func main() {
     }
 
     if os.Getenv("ENV") == "dev" {
-        server.Addr = ":8080"
-        server.TLSConfig = security.SecureTLSConfig()
-        fmt.Printf("Development mode: Listening on %s\n", server.Addr)
-        if err := server.ListenAndServeTLS("certs/localhost+2.pem", "certs/localhost+2-key.pem"); err != nil {
+        tlsCfg := security.SecureTLSConfig()
+        cert, err := tls.LoadX509KeyPair("certs/localhost+2.pem", "certs/localhost+2-key.pem")
+        if err != nil {
+            panic(err)
+        }
+        tlsCfg.Certificates = []tls.Certificate{cert}
+        server.TLSConfig = tlsCfg
+
+        tcpLn, err := net.Listen("tcp", ":8080")
+        if err != nil {
+            panic(err)
+        }
+        fmt.Println("Development mode: Listening on :8080 (HTTP redirects to HTTPS automatically)")
+        if err := server.Serve(&sniffingListener{inner: tcpLn, tlsCfg: tlsCfg}); err != nil {
             panic(err)
         }
         return

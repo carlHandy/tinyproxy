@@ -11,7 +11,7 @@ A security-focused reverse proxy and web server — a single-binary alternative 
 
 ### Development
 
-Dev mode listens on `:8080` with TLS using local certificates. Generate them once with mkcert:
+Dev mode listens on `:8080`. Both `http://localhost:8080` and `https://localhost:8080` work — plain HTTP connections are automatically redirected to HTTPS. Generate the local certificates once with mkcert:
 
 ```bash
 mkcert localhost 127.0.0.1 ::1
