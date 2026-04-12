@@ -4,11 +4,11 @@ import (
     "fmt"
     "os"
     "net/http"
+    "tinyproxy/internal/server/botdetect"
     "tinyproxy/internal/server/compression"
     "tinyproxy/internal/server/config"
     "tinyproxy/internal/server/proxy"
     "tinyproxy/internal/server/security"
-    "tinyproxy/internal/server/middleware"
     "tinyproxy/internal/server/security/certmanager"
     "tinyproxy/internal/fastcgi"
 )
@@ -24,27 +24,36 @@ func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
         vhost = vh.config.VHosts["default"]
     }
 
-    // Create rate limiter specific to this vhost
-    rateLimitedHandler := security.RateLimit(
-        vhost.Security.RateLimit.Requests,
-        vhost.Security.RateLimit.Window,
-    )(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        // Set security headers
+    botCfg := botdetect.BotConfig{
+        Enabled:       vhost.BotProtection.Enabled,
+        BlockScanners: vhost.BotProtection.BlockScanners,
+        BlockedAgents: vhost.BotProtection.BlockedAgents,
+        AllowedAgents: vhost.BotProtection.AllowedAgents,
+    }
+
+    // Pipeline: rate limit → bot detection → security headers → compression → dispatch
+    inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         vh.setSecurityHeaders(w, vhost)
 
-        // Select handler based on host
         handler := vh.handleVHost
         if !exists {
             handler = vh.handleDefaultVHost
         }
 
-        // Apply compression if enabled
         if vhost.Compression {
             compression.Compress(handler)(w, r)
             return
         }
         handler(w, r)
-    }))
+    })
+
+    botHandler := botdetect.BotDetect(botCfg)(inner)
+
+    rateLimitedHandler := security.RateLimit(
+        vhost.Security.RateLimit.Requests,
+        vhost.Security.RateLimit.Window,
+    )(botHandler)
+
     rateLimitedHandler.ServeHTTP(w, r)
 }
 func (vh *VHostHandler) setSecurityHeaders(w http.ResponseWriter, vhost *config.VirtualHost) {
@@ -101,14 +110,10 @@ func main() {
     }
 
     handler := &VHostHandler{config: config}
-    rateLimitedHandler := security.RateLimit(
-        config.VHosts["default"].Security.RateLimit.Requests,
-        config.VHosts["default"].Security.RateLimit.Window,
-    )(handler)
-    
+
     // Base server config
     server := &http.Server{
-        Handler: rateLimitedHandler,
+        Handler: handler,
     }
 
     if os.Getenv("ENV") == "dev" {
