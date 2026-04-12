@@ -20,6 +20,14 @@ type SecurityConfig struct {
     MaxBodySize int64 
 }
 
+// BotProtectionConfig controls per-vhost bot detection settings.
+type BotProtectionConfig struct {
+    Enabled       bool
+    BlockScanners bool
+    BlockedAgents []string
+    AllowedAgents []string
+}
+
 type VirtualHost struct {
     Hostname    string
     Port        int
@@ -44,6 +52,7 @@ type VirtualHost struct {
         Index    string // e.g. "index.php"
         Params   map[string]string
     }
+    BotProtection BotProtectionConfig
 }
 
 func NewVirtualHost() *VirtualHost {

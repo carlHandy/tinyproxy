@@ -119,6 +119,8 @@ func (p *Parser) parseLine(line string) error {
         return p.parseSocks5()
     case "fastcgi":
         return p.parseFastCGI()
+    case "bot_protection":
+        return p.parseBotProtection()
     }
 
     return nil
@@ -249,6 +251,39 @@ func (p *Parser) parseRateLimit() error {
             p.currentVHost.Security.RateLimit.Window = window
         case "enabled":
             p.currentVHost.Security.RateLimit.Enabled = p.currentVHost.Security.RateLimit.Requests != 0
+        }
+    }
+    return nil
+}
+
+func (p *Parser) parseBotProtection() error {
+    for p.scanner.Scan() {
+        p.line++
+        line := strings.TrimSpace(p.scanner.Text())
+
+        if line == "" || strings.HasPrefix(line, "#") {
+            continue
+        }
+        if line == "}" {
+            return nil
+        }
+
+        parts := strings.Fields(line)
+        if len(parts) < 2 {
+            continue
+        }
+
+        switch parts[0] {
+        case "enabled":
+            p.currentVHost.BotProtection.Enabled = parts[1] == "true"
+        case "block_scanners":
+            p.currentVHost.BotProtection.BlockScanners = parts[1] == "true"
+        case "block":
+            p.currentVHost.BotProtection.BlockedAgents = append(
+                p.currentVHost.BotProtection.BlockedAgents, parts[1])
+        case "allow":
+            p.currentVHost.BotProtection.AllowedAgents = append(
+                p.currentVHost.BotProtection.AllowedAgents, parts[1])
         }
     }
     return nil
