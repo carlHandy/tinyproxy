@@ -1,0 +1,35 @@
+version: 2
+
+project_name: tinyproxy
+
+builds:
+  - main: ./cmd/tinyproxy/
+    binary: tinyproxy
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+# This creates the .deb and .rpm packages for Linux
+nfpms:
+  - vendor: "Carl Handy"
+    homepage: "https://github.com/carlHandy/tinyproxy"
+    maintainer: "Carl Handy"
+    description: "A secure and performant reverse proxy and web server"
+    license: "MIT" # Change if using a different license
+    formats:
+      - deb
+      - rpm
+
+# This packages Windows and macOS binaries into zip/tar files
+archives:
+  - format: tar.gz
+    # Use zip for Windows
+    format_overrides:
+      - goos: windows
+        format: zip
