@@ -25,7 +25,7 @@ type Manager struct {
 	acm *autocert.Manager
 }
 
-func NewManager(cfg *config.ServerConfig) *Manager {
+func NewManager(cfg *config.ServerConfig, cacheDir string) *Manager {
 	var domains []string
 	for domain := range cfg.VHosts {
 		if domain == "default" || domain == "default_ssl" {
@@ -41,7 +41,7 @@ func NewManager(cfg *config.ServerConfig) *Manager {
 
 	acm := &autocert.Manager{
 		Prompt:     autocert.AcceptTOS,
-		Cache:      autocert.DirCache("certs"),
+		Cache:      autocert.DirCache(cacheDir),
 		HostPolicy: autocert.HostWhitelist(domains...),
 	}
 	return &Manager{acm: acm}

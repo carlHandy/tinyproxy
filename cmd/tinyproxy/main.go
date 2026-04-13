@@ -189,6 +189,18 @@ func staticRoot() string {
 	return "/usr/share/tinyproxy/static"
 }
 
+// certCacheDir returns the directory autocert uses to persist certificates.
+// Uses a local "certs/" directory in dev, and an absolute system path when
+// installed — relative paths break under systemd's working directory.
+func certCacheDir() string {
+	if _, err := os.Stat("certs"); err == nil {
+		return "certs"
+	}
+	return "/var/cache/tinyproxy/certs"
+}
+
+const systemCertCacheDir = "/var/cache/tinyproxy/certs"
+
 // configPath returns the active config file path: local first, then system.
 func configPath() string {
 	if _, err := os.Stat("config/vhosts.conf"); err == nil {
@@ -265,7 +277,7 @@ func runServer() {
 
 	// Production — one shared cert manager so HTTP-01 challenge tokens are visible
 	// to both the port-80 handler and the port-443 TLS handshake.
-	mgr := certmanager.NewManager(cfg)
+	mgr := certmanager.NewManager(cfg, certCacheDir())
 	server.Addr = ":443"
 	server.TLSConfig = mgr.TLSConfig()
 
@@ -394,6 +406,41 @@ func runUpgrade() {
 	log.Println("Upgrade complete.")
 }
 
+func runSSL() {
+	sub := "regenerate"
+	if len(os.Args) > 2 {
+		sub = os.Args[2]
+	}
+	switch sub {
+	case "regenerate":
+		runSSLRegenerate()
+	default:
+		fmt.Fprintf(os.Stderr, "Usage: tinyproxy ssl regenerate\n")
+		os.Exit(1)
+	}
+}
+
+func runSSLRegenerate() {
+	log.Println("Stopping tinyproxy...")
+	mustRun("systemctl", "stop", "tinyproxy")
+
+	log.Printf("Clearing certificate cache at %s...", systemCertCacheDir)
+	entries, err := os.ReadDir(systemCertCacheDir)
+	if err != nil && !os.IsNotExist(err) {
+		log.Fatalf("failed to read cert cache: %v", err)
+	}
+	for _, e := range entries {
+		path := systemCertCacheDir + "/" + e.Name()
+		if err := os.Remove(path); err != nil {
+			log.Printf("warning: could not remove %s: %v", path, err)
+		}
+	}
+
+	log.Println("Starting tinyproxy...")
+	mustRun("systemctl", "start", "tinyproxy")
+	log.Println("Done. New certificates will be obtained automatically on the next HTTPS connection.")
+}
+
 func hasBin(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
@@ -433,8 +480,10 @@ func main() {
 		runLogs()
 	case "upgrade":
 		runUpgrade()
+	case "ssl":
+		runSSL()
 	default:
-		fmt.Fprintf(os.Stderr, "Usage: tinyproxy {start|stop|restart|reload|status|config|logs|upgrade}\n")
+		fmt.Fprintf(os.Stderr, "Usage: tinyproxy {start|stop|restart|reload|status|config|logs|upgrade|ssl}\n")
 		os.Exit(1)
 	}
 }
