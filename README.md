@@ -41,7 +41,7 @@ Download `tinyproxy_1.0.0_windows_amd64.zip` from the releases page and extract 
 
 ```powershell
 # Open PowerShell or Command Prompt, cd to the extracted folder, then:
-.\tinyproxy.exe
+.\tinyproxy.exe serve
 ```
 
 If the window still flashes and exits, the most common cause is a missing or invalid `config/vhosts.conf`. Make sure the `config/` directory (with a valid `vhosts.conf`) is in the same folder as the binary before running.
@@ -54,6 +54,35 @@ cd tinyproxy
 go build -o tinyproxy ./cmd/tinyproxy/
 sudo mv tinyproxy /usr/local/bin/
 ```
+
+## Managing the service
+
+When installed via `.deb` or `.rpm`, tinyproxy runs as a systemd service and starts automatically on boot. Use the built-in CLI to manage it:
+
+```bash
+tinyproxy start      # start the service
+tinyproxy stop       # stop the service
+tinyproxy restart    # restart the service
+tinyproxy reload     # reload config without downtime (sends SIGHUP)
+tinyproxy status     # show service status
+tinyproxy config     # open /etc/tinyproxy/vhosts.conf in $EDITOR (falls back to nano)
+tinyproxy logs       # tail live logs via journalctl
+```
+
+After editing the config, apply changes without restarting:
+
+```bash
+tinyproxy config     # edit the file
+tinyproxy reload     # pick up the changes instantly
+```
+
+## Default page
+
+Before you configure any virtual hosts, visiting your server's IP in a browser will:
+1. Redirect HTTP → HTTPS automatically
+2. Serve a built-in default page over TLS
+
+> **Note:** Direct IP access uses a self-signed certificate (ACME cannot issue certs for IPs), so your browser will show a security warning. This is expected until you point a domain at the server and configure a vhost.
 
 ## Running
 

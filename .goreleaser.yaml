@@ -25,10 +25,17 @@ nfpms:
     formats:
       - deb
       - rpm
+    scripts:
+      postinstall: packaging/postinstall.sh
+      preremove: packaging/preremove.sh
     contents:
       - src: config/vhosts.conf
         dst: /etc/tinyproxy/vhosts.conf
         type: config|noreplace
+      - src: packaging/tinyproxy.service
+        dst: /lib/systemd/system/tinyproxy.service
+      - src: static/
+        dst: /usr/share/tinyproxy/static/
 
 # This packages Windows and macOS binaries into zip/tar files
 archives:
