@@ -283,6 +283,9 @@ func (p *Parser) parseBotProtection() error {
         case "block":
             p.currentVHost.BotProtection.BlockedAgents = append(
                 p.currentVHost.BotProtection.BlockedAgents, parts[1])
+        case "block_path":
+            p.currentVHost.BotProtection.BlockedPaths = append(
+                p.currentVHost.BotProtection.BlockedPaths, parts[1])
         case "allow":
             p.currentVHost.BotProtection.AllowedAgents = append(
                 p.currentVHost.BotProtection.AllowedAgents, parts[1])

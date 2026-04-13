@@ -29,6 +29,24 @@ var suspiciousPaths = []string{
 	"/credentials",
 }
 
+// isBlockedPath checks whether rawPath matches any operator-defined blocked path prefix.
+func isBlockedPath(rawPath string, blocked []string) bool {
+	if len(blocked) == 0 {
+		return false
+	}
+	decoded, err := url.PathUnescape(rawPath)
+	if err != nil {
+		decoded = rawPath
+	}
+	lower := strings.ToLower(path.Clean(decoded))
+	for _, p := range blocked {
+		if strings.HasPrefix(lower, strings.ToLower(p)) {
+			return true
+		}
+	}
+	return false
+}
+
 func isSuspiciousPath(rawPath string) bool {
 	decoded, err := url.PathUnescape(rawPath)
 	if err != nil {

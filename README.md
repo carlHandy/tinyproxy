@@ -233,6 +233,20 @@ vhosts {
 
 **`honeypot`** — instead of returning 403, serve convincing fake content tailored to the requested path (fake `.env` with bogus credentials, fake WordPress login, fake phpMyAdmin, fake Spring Boot actuator JSON, etc.). Adds a random 150–750 ms delay to slow down automated scanners. Every hit is logged with `HONEYPOT` prefix for easy filtering. When omitted, blocked requests receive a plain 403.
 
+**`block_path <path>`** — block a path prefix that isn't in the built-in list. Applies the same URL-decode and path-normalisation logic as `block_scanners`, and respects `honeypot`. Repeat the directive for multiple paths:
+
+```text
+bot_protection {
+    enabled        true
+    block_scanners true
+    honeypot       true
+    block_path     /jenkins
+    block_path     /phpMyAdmin
+    block_path     /actuator
+    block_path     /wp-admin
+}
+```
+
 **`block <token>`** — add extra User-Agent substrings to block beyond the built-in list:
 
 ```text

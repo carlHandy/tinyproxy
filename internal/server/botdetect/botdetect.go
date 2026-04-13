@@ -12,6 +12,7 @@ type BotConfig struct {
 	Honeypot      bool // serve convincing fake content instead of 403
 	BlockedAgents []string
 	AllowedAgents []string
+	BlockedPaths  []string // operator-defined paths to block in addition to built-ins
 }
 
 // BotDetect returns middleware that inspects User-Agent and request path.
@@ -50,6 +51,11 @@ func BotDetect(cfg BotConfig) func(http.Handler) http.Handler {
 				rawPath = r.URL.Path
 			}
 			if cfg.BlockScanners && isSuspiciousPath(rawPath) {
+				block(w, r, cfg.Honeypot)
+				return
+			}
+
+			if isBlockedPath(rawPath, cfg.BlockedPaths) {
 				block(w, r, cfg.Honeypot)
 				return
 			}

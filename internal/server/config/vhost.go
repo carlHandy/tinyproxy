@@ -27,6 +27,7 @@ type BotProtectionConfig struct {
     Honeypot      bool     // serve convincing fake content instead of 403
     BlockedAgents []string
     AllowedAgents []string
+    BlockedPaths  []string // operator-defined paths to block in addition to built-ins
 }
 
 type VirtualHost struct {

@@ -117,6 +117,7 @@ func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Honeypot:      vhost.BotProtection.Honeypot,
 		BlockedAgents: vhost.BotProtection.BlockedAgents,
 		AllowedAgents: vhost.BotProtection.AllowedAgents,
+		BlockedPaths:  vhost.BotProtection.BlockedPaths,
 	}
 
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
