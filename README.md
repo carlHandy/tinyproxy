@@ -40,7 +40,7 @@ Download `tinyproxy_1.0.0_windows_amd64.zip` from the releases page, extract it,
 ### Build from Source
 If you prefer to compile it yourself:
 ```bash
-git clone [https://github.com/carlHandy/tinyproxy.git](https://github.com/carlHandy/tinyproxy.git)
+git clone https://github.com/carlHandy/tinyproxy.git
 cd tinyproxy
 go build -o tinyproxy ./cmd/tinyproxy/
 sudo mv tinyproxy /usr/local/bin/
