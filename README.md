@@ -35,7 +35,16 @@ sudo mv tinyproxy /usr/local/bin/
 *(Note: If you are on macOS or an ARM64 machine, make sure to grab the `darwin` or `arm64` archive instead!)*
 
 ### Windows
-Download `tinyproxy_1.0.0_windows_amd64.zip` from the releases page, extract it, and run `tinyproxy.exe` from your command prompt or PowerShell.
+Download `tinyproxy_1.0.0_windows_amd64.zip` from the releases page and extract it.
+
+> **Do not double-click `tinyproxy.exe`** — Windows will open and immediately close the console window before you can see any output. Always run it from a Command Prompt or PowerShell session:
+
+```powershell
+# Open PowerShell or Command Prompt, cd to the extracted folder, then:
+.\tinyproxy.exe
+```
+
+If the window still flashes and exits, the most common cause is a missing or invalid `config/vhosts.conf`. Make sure the `config/` directory (with a valid `vhosts.conf`) is in the same folder as the binary before running.
 
 ### Build from Source
 If you prefer to compile it yourself:
