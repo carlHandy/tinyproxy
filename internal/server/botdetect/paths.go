@@ -6,23 +6,25 @@ import (
 	"strings"
 )
 
+/** 
+	suspiciousPaths contains paths that are universally suspicious — dotfiles,
+	system paths, and framework internals that no legitimate web application
+ 	should expose publicly.
+
+	Application-specific paths (WordPress, phpMyAdmin, Jenkins, Solr, etc.) are
+	intentionally excluded. A site may legitimately run any of these, and
+	operators who know they are not should add them via the `block_path` directive
+	rather than having the default list break their stack.
+**/
 var suspiciousPaths = []string{
 	"/.env",
 	"/.git",
 	"/.svn",
 	"/.htaccess",
-	"/wp-admin",
-	"/wp-login",
-	"/phpMyAdmin",
-	"/phpmyadmin",
+	"/.aws",
 	"/etc/passwd",
 	"/etc/shadow",
-	"/actuator",
-	"/console",
-	"/manager/html",
-	"/solr/",
-	"/jenkins",
-	"/.aws",
+	"/proc/self",
 	"/config.json",
 	"/credentials",
 }
