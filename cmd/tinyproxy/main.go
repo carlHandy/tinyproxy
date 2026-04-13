@@ -155,7 +155,11 @@ func (vh *VHostHandler) handleDefaultVHost(w http.ResponseWriter, r *http.Reques
 }
 
 func main() {
-    configFile, err := os.Open("config/vhosts.conf")
+    configPath := "config/vhosts.conf"
+    if _, err := os.Stat(configPath); os.IsNotExist(err) {
+        configPath = "/etc/tinyproxy/vhosts.conf"
+    }
+    configFile, err := os.Open(configPath)
     if err != nil {
         panic(err)
     }

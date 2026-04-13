@@ -25,6 +25,10 @@ nfpms:
     formats:
       - deb
       - rpm
+    contents:
+      - src: config/vhosts.conf
+        dst: /etc/tinyproxy/vhosts.conf
+        type: config|noreplace
 
 # This packages Windows and macOS binaries into zip/tar files
 archives:
