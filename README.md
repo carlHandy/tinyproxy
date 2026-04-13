@@ -1,8 +1,6 @@
 # tinyproxy
 
-A security-focused reverse proxy and web server — a single-binary alternative to
-nginx + Traefik with native bot detection and AI crawler prevention built into
-the request pipeline.
+A security-focused reverse proxy and web server — a single-binary alternative to nginx + Traefik with native bot detection and AI crawler prevention built into the request pipeline.
 
 ## Requirements
 
@@ -11,47 +9,38 @@ the request pipeline.
 
 ## Installation
 
-You can download pre-compiled binaries and packages for your operating system
-from the [Releases page](https://github.com/carlHandy/tinyproxy/releases).
+You can download pre-compiled binaries and packages for your operating system from the [Releases page](https://github.com/carlHandy/tinyproxy/releases).
 
 ### Debian / Ubuntu
-
-Download the `.deb` package from the latest release and install it:
-
+Download the `.deb` package and install it (replace `1.0.0` with the latest version):
 ```bash
-wget https://github.com/carlHandy/tinyproxy/releases/latest/download/tinyproxy_Linux_x86_64.deb
-sudo dpkg -i tinyproxy_Linux_x86_64.deb
+wget https://github.com/carlHandy/tinyproxy/releases/download/v1.0.0/tinyproxy_1.0.0_linux_amd64.deb
+sudo dpkg -i tinyproxy_1.0.0_linux_amd64.deb
 ```
 
 ### RHEL / Fedora / AlmaLinux
-
-Download the `.rpm` package from the latest release and install it:
-
+Download the `.rpm` package and install it (replace `1.0.0` with the latest version):
 ```bash
-wget https://github.com/carlHandy/tinyproxy/releases/latest/download/tinyproxy_Linux_x86_64.rpm
-sudo rpm -i tinyproxy_Linux_x86_64.rpm
+wget https://github.com/carlHandy/tinyproxy/releases/download/v1.0.0/tinyproxy_1.0.0_linux_amd64.rpm
+sudo rpm -i tinyproxy_1.0.0_linux_amd64.rpm
 ```
 
 ### macOS / Linux (Standalone Binary)
-
 Download the `.tar.gz` archive, extract it, and move the binary to your path:
-
 ```bash
-tar -xzf tinyproxy_Linux_x86_64.tar.gz
+wget https://github.com/carlHandy/tinyproxy/releases/download/v1.0.0/tinyproxy_1.0.0_linux_amd64.tar.gz
+tar -xzf tinyproxy_1.0.0_linux_amd64.tar.gz
 sudo mv tinyproxy /usr/local/bin/
 ```
+*(Note: If you are on macOS or an ARM64 machine, make sure to grab the `darwin` or `arm64` archive instead!)*
 
 ### Windows
-
-Download the `.zip` archive from the releases page, extract it, and run
-`tinyproxy.exe` from your command prompt or PowerShell.
+Download `tinyproxy_1.0.0_windows_amd64.zip` from the releases page, extract it, and run `tinyproxy.exe` from your command prompt or PowerShell.
 
 ### Build from Source
-
 If you prefer to compile it yourself:
-
 ```bash
-git clone https://github.com/carlHandy/tinyproxy.git
+git clone [https://github.com/carlHandy/tinyproxy.git](https://github.com/carlHandy/tinyproxy.git)
 cd tinyproxy
 go build -o tinyproxy ./cmd/tinyproxy/
 sudo mv tinyproxy /usr/local/bin/
@@ -61,9 +50,7 @@ sudo mv tinyproxy /usr/local/bin/
 
 ### Development
 
-Dev mode listens on `:8080`. Both `http://localhost:8080` and
-`https://localhost:8080` work — plain HTTP connections are automatically
-redirected to HTTPS. Generate the local certificates once with mkcert:
+Dev mode listens on `:8080`. Both `http://localhost:8080` and `https://localhost:8080` work — plain HTTP connections are automatically redirected to HTTPS. Generate the local certificates once with mkcert:
 
 ```bash
 mkcert localhost 127.0.0.1 ::1
@@ -80,19 +67,14 @@ ENV=dev go run ./cmd/tinyproxy/
 
 ### Production
 
-Production mode listens on `:443` with automatic TLS via Let's Encrypt (ACME),
-and spins up an HTTP→HTTPS redirect on `:80`.
+Production mode listens on `:443` with automatic TLS via Let's Encrypt (ACME), and spins up an HTTP→HTTPS redirect on `:80`.
 
 ```bash
 tinyproxy
 ```
+*(Note: If not installed via a package manager to run as a service, you may need to run with `sudo` to bind to ports 80 and 443).*
 
-_(Note: If not installed via a package manager to run as a service, you may need
-to run with `sudo` to bind to ports 80 and 443)._
-
-Certificates are obtained automatically for every domain defined in
-`config/vhosts.conf` and cached in the `certs/` directory. The server must be
-publicly reachable on port 80 for the ACME challenge.
+Certificates are obtained automatically for every domain defined in `config/vhosts.conf` and cached in the `certs/` directory. The server must be publicly reachable on port 80 for the ACME challenge.
 
 ## Configuration
 
@@ -187,10 +169,7 @@ vhosts {
 }
 ```
 
-Defaults applied to every vhost: `X-Frame-Options: SAMEORIGIN`,
-`X-Content-Type-Options: nosniff`,
-`Strict-Transport-Security: max-age=31536000; includeSubDomains`, 100 req/min
-rate limit, 10 MB max body size.
+Defaults applied to every vhost: `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security: max-age=31536000; includeSubDomains`, 100 req/min rate limit, 10 MB max body size.
 
 ### Bot and AI crawler protection
 
@@ -210,13 +189,9 @@ vhosts {
 
 **`enabled`** — activates the middleware for this vhost.
 
-**`block_scanners`** — blocks requests to known vulnerability-scanning paths:
-`/.env`, `/.git`, `/wp-admin`, `/phpMyAdmin`, `/actuator`, `/etc/passwd`, and
-others. Handles URL-encoded variants (`/.%65nv`) and path normalisation tricks
-(`//wp-admin`).
+**`block_scanners`** — blocks requests to known vulnerability-scanning paths: `/.env`, `/.git`, `/wp-admin`, `/phpMyAdmin`, `/actuator`, `/etc/passwd`, and others. Handles URL-encoded variants (`/.%65nv`) and path normalisation tricks (`//wp-admin`).
 
-**`block <token>`** — add extra User-Agent substrings to block beyond the
-built-in list:
+**`block <token>`** — add extra User-Agent substrings to block beyond the built-in list:
 
 ```text
 bot_protection {
@@ -225,8 +200,7 @@ bot_protection {
 }
 ```
 
-**`allow <token>`** — permanently allow a User-Agent substring, overriding all
-block rules:
+**`allow <token>`** — permanently allow a User-Agent substring, overriding all block rules:
 
 ```text
 bot_protection {
@@ -239,21 +213,19 @@ bot_protection {
 
 AI crawlers and scrapers blocked by default when `enabled true`:
 
-| Category    | Agents                                                                               |
-| ----------- | ------------------------------------------------------------------------------------ |
+| Category | Agents |
+|---|---|
 | AI crawlers | GPTBot, ClaudeBot, CCBot, PerplexityBot, YouBot, anthropic-ai, cohere-ai, Bytespider |
-| SEO bots    | AhrefsBot, SemrushBot, MJ12bot, DotBot, PetalBot                                     |
-| Scrapers    | python-requests, Scrapy, libwww-perl, masscan, zgrab                                 |
+| SEO bots | AhrefsBot, SemrushBot, MJ12bot, DotBot, PetalBot |
+| Scrapers | python-requests, Scrapy, libwww-perl, masscan, zgrab |
 
 #### Built-in allowed agents
 
 Always permitted through, regardless of block rules:
 
-Googlebot, bingbot, DuckDuckBot, Slurp (Yahoo), Baiduspider,
-facebookexternalhit, Twitterbot, LinkedInBot, Applebot
+Googlebot, bingbot, DuckDuckBot, Slurp (Yahoo), Baiduspider, facebookexternalhit, Twitterbot, LinkedInBot, Applebot
 
-Allowlist matching uses word-boundary detection — a UA like `EvilGooglebot/1.0`
-is **not** treated as Googlebot.
+Allowlist matching uses word-boundary detection — a UA like `EvilGooglebot/1.0` is **not** treated as Googlebot.
 
 ## TLS
 
