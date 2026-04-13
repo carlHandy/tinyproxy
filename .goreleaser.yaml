@@ -28,8 +28,10 @@ nfpms:
 
 # This packages Windows and macOS binaries into zip/tar files
 archives:
-  - format: tar.gz
+  - formats: 
+      - tar.gz
     # Use zip for Windows
     format_overrides:
       - goos: windows
-        format: zip
+        formats: 
+          - zip
