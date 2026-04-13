@@ -19,7 +19,7 @@ from the [Releases page](https://github.com/carlHandy/tinyproxy/releases).
 Download the `.deb` package from the latest release and install it:
 
 ```bash
-wget [https://github.com/carlHandy/tinyproxy/releases/latest/download/tinyproxy_Linux_x86_64.deb](https://github.com/carlHandy/tinyproxy/releases/latest/download/tinyproxy_Linux_x86_64.deb)
+wget https://github.com/carlHandy/tinyproxy/releases/latest/download/tinyproxy_Linux_x86_64.deb
 sudo dpkg -i tinyproxy_Linux_x86_64.deb
 ```
 
@@ -28,7 +28,7 @@ sudo dpkg -i tinyproxy_Linux_x86_64.deb
 Download the `.rpm` package from the latest release and install it:
 
 ```bash
-wget [https://github.com/carlHandy/tinyproxy/releases/latest/download/tinyproxy_Linux_x86_64.rpm](https://github.com/carlHandy/tinyproxy/releases/latest/download/tinyproxy_Linux_x86_64.rpm)
+wget https://github.com/carlHandy/tinyproxy/releases/latest/download/tinyproxy_Linux_x86_64.rpm
 sudo rpm -i tinyproxy_Linux_x86_64.rpm
 ```
 
@@ -51,7 +51,7 @@ Download the `.zip` archive from the releases page, extract it, and run
 If you prefer to compile it yourself:
 
 ```bash
-git clone [https://github.com/carlHandy/tinyproxy.git](https://github.com/carlHandy/tinyproxy.git)
+git clone https://github.com/carlHandy/tinyproxy.git
 cd tinyproxy
 go build -o tinyproxy ./cmd/tinyproxy/
 sudo mv tinyproxy /usr/local/bin/
