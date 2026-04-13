@@ -176,7 +176,7 @@ func (vh *VHostHandler) handleVHost(w http.ResponseWriter, r *http.Request, vhos
 }
 
 func (vh *VHostHandler) handleDefaultVHost(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, staticRoot()+"/index.html")
+	http.FileServer(http.Dir(staticRoot())).ServeHTTP(w, r)
 }
 
 // staticRoot returns the directory containing the bundled static files.
