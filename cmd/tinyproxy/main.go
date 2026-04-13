@@ -114,6 +114,7 @@ func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	botCfg := botdetect.BotConfig{
 		Enabled:       vhost.BotProtection.Enabled,
 		BlockScanners: vhost.BotProtection.BlockScanners,
+		Honeypot:      vhost.BotProtection.Honeypot,
 		BlockedAgents: vhost.BotProtection.BlockedAgents,
 		AllowedAgents: vhost.BotProtection.AllowedAgents,
 	}

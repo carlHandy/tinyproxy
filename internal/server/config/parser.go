@@ -278,6 +278,8 @@ func (p *Parser) parseBotProtection() error {
             p.currentVHost.BotProtection.Enabled = parts[1] == "true"
         case "block_scanners":
             p.currentVHost.BotProtection.BlockScanners = parts[1] == "true"
+        case "honeypot":
+            p.currentVHost.BotProtection.Honeypot = parts[1] == "true"
         case "block":
             p.currentVHost.BotProtection.BlockedAgents = append(
                 p.currentVHost.BotProtection.BlockedAgents, parts[1])

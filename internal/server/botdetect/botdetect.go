@@ -9,13 +9,15 @@ import (
 type BotConfig struct {
 	Enabled       bool
 	BlockScanners bool
+	Honeypot      bool // serve convincing fake content instead of 403
 	BlockedAgents []string
 	AllowedAgents []string
 }
 
 // BotDetect returns middleware that inspects User-Agent and request path.
 // Allowed bots (Googlebot etc.) pass through unconditionally.
-// Blocked bots and scanner paths receive 403.
+// Blocked bots and scanner paths receive either a honeypot response (when
+// cfg.Honeypot is true) or a plain 403.
 func BotDetect(cfg BotConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +36,7 @@ func BotDetect(cfg BotConfig) func(http.Handler) http.Handler {
 
 			// Block by User-Agent.
 			if isKnownBot(ua) || containsAny(ua, cfg.BlockedAgents) {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				block(w, r, cfg.Honeypot)
 				return
 			}
 
@@ -48,13 +50,22 @@ func BotDetect(cfg BotConfig) func(http.Handler) http.Handler {
 				rawPath = r.URL.Path
 			}
 			if cfg.BlockScanners && isSuspiciousPath(rawPath) {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				block(w, r, cfg.Honeypot)
 				return
 			}
 
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// block either serves a honeypot response or a plain 403.
+func block(w http.ResponseWriter, r *http.Request, honeypot bool) {
+	if honeypot {
+		serveHoneypot(w, r)
+		return
+	}
+	http.Error(w, "Forbidden", http.StatusForbidden)
 }
 
 // containsAny returns true if s contains any of the substrings in list (case-insensitive).
