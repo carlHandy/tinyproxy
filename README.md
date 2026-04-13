@@ -221,6 +221,7 @@ vhosts {
         bot_protection {
             enabled        true
             block_scanners true
+            honeypot       true
         }
     }
 }
@@ -228,7 +229,9 @@ vhosts {
 
 **`enabled`** — activates the middleware for this vhost.
 
-**`block_scanners`** — blocks requests to known vulnerability-scanning paths: `/.env`, `/.git`, `/wp-admin`, `/phpMyAdmin`, `/actuator`, `/etc/passwd`, and others. Handles URL-encoded variants (`/.%65nv`) and path normalisation tricks (`//wp-admin`).
+**`block_scanners`** — intercepts requests to known vulnerability-scanning paths: `/.env`, `/.git`, `/wp-admin`, `/phpMyAdmin`, `/actuator`, `/etc/passwd`, and others. Handles URL-encoded variants (`/.%65nv`) and path normalisation tricks (`//wp-admin`).
+
+**`honeypot`** — instead of returning 403, serve convincing fake content tailored to the requested path (fake `.env` with bogus credentials, fake WordPress login, fake phpMyAdmin, fake Spring Boot actuator JSON, etc.). Adds a random 150–750 ms delay to slow down automated scanners. Every hit is logged with `HONEYPOT` prefix for easy filtering. When omitted, blocked requests receive a plain 403.
 
 **`block <token>`** — add extra User-Agent substrings to block beyond the built-in list:
 

@@ -24,6 +24,7 @@ type SecurityConfig struct {
 type BotProtectionConfig struct {
     Enabled       bool
     BlockScanners bool
+    Honeypot      bool     // serve convincing fake content instead of 403
     BlockedAgents []string
     AllowedAgents []string
 }
