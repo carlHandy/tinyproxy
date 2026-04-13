@@ -67,6 +67,7 @@ tinyproxy reload     # reload config without downtime (sends SIGHUP)
 tinyproxy status     # show service status
 tinyproxy config     # open /etc/tinyproxy/vhosts.conf in $EDITOR (falls back to nano)
 tinyproxy logs       # tail live logs via journalctl
+tinyproxy upgrade    # download and install the latest release, then restart
 ```
 
 After editing the config, apply changes without restarting:

@@ -2,13 +2,17 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -307,6 +311,103 @@ func runLogs() {
 	cmd.Run()
 }
 
+func runUpgrade() {
+	const repo = "carlHandy/tinyproxy"
+
+	log.Println("Checking for latest release...")
+	resp, err := http.Get("https://api.github.com/repos/" + repo + "/releases/latest")
+	if err != nil {
+		log.Fatalf("failed to check for updates: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var release struct {
+		TagName string `json:"tag_name"`
+		Assets  []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+		} `json:"assets"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		log.Fatalf("failed to parse release info: %v", err)
+	}
+	log.Printf("Latest version: %s", release.TagName)
+
+	goos := runtime.GOOS
+	goarch := runtime.GOARCH
+	version := strings.TrimPrefix(release.TagName, "v")
+
+	// Determine installer format based on available package manager.
+	ext := "tar.gz"
+	installFn := func(path string) {
+		log.Fatalf("binary upgrade not supported on this platform; download manually from https://github.com/%s/releases", repo)
+	}
+	switch {
+	case goos == "linux" && hasBin("dpkg"):
+		ext = "deb"
+		installFn = func(path string) { mustRun("dpkg", "-i", path) }
+	case goos == "linux" && hasBin("rpm"):
+		ext = "rpm"
+		installFn = func(path string) { mustRun("rpm", "-U", path) }
+	case goos == "windows":
+		ext = "zip"
+		installFn = func(_ string) {
+			log.Fatalf("automatic upgrade not supported on Windows; download manually from https://github.com/%s/releases", repo)
+		}
+	}
+
+	assetName := fmt.Sprintf("tinyproxy_%s_%s_%s.%s", version, goos, goarch, ext)
+	var downloadURL string
+	for _, a := range release.Assets {
+		if a.Name == assetName {
+			downloadURL = a.BrowserDownloadURL
+			break
+		}
+	}
+	if downloadURL == "" {
+		log.Fatalf("no release asset found for this platform (%s); expected %q", goos+"/"+goarch, assetName)
+	}
+
+	log.Printf("Downloading %s...", assetName)
+	dlResp, err := http.Get(downloadURL)
+	if err != nil {
+		log.Fatalf("download failed: %v", err)
+	}
+	defer dlResp.Body.Close()
+
+	tmp, err := os.CreateTemp("", "tinyproxy-upgrade-*."+ext)
+	if err != nil {
+		log.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmp.Name())
+
+	if _, err := io.Copy(tmp, dlResp.Body); err != nil {
+		log.Fatalf("failed to write download: %v", err)
+	}
+	tmp.Close()
+
+	log.Println("Installing...")
+	installFn(tmp.Name())
+
+	log.Println("Restarting service...")
+	mustRun("systemctl", "restart", "tinyproxy")
+	log.Println("Upgrade complete.")
+}
+
+func hasBin(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
+func mustRun(name string, args ...string) {
+	cmd := exec.Command(name, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("%s failed: %v", name, err)
+	}
+}
+
 func main() {
 	cmd := "serve"
 	if len(os.Args) > 1 {
@@ -330,8 +431,10 @@ func main() {
 		runOpenConfig()
 	case "logs":
 		runLogs()
+	case "upgrade":
+		runUpgrade()
 	default:
-		fmt.Fprintf(os.Stderr, "Usage: tinyproxy {start|stop|restart|reload|status|config|logs}\n")
+		fmt.Fprintf(os.Stderr, "Usage: tinyproxy {start|stop|restart|reload|status|config|logs|upgrade}\n")
 		os.Exit(1)
 	}
 }
