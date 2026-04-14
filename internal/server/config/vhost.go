@@ -39,3 +39,10 @@ type VirtualHost struct {
     CertFile    string
     KeyFile     string
     Compression bool
+    Security    SecurityConfig
+    BotProtection BotProtectionConfig
+    ClientMaxBodySize int
+    ReadTimeout     time.Duration
+    WriteTimeout    time.Duration
+    IdleTimeout     time.Duration
+}
