@@ -21,10 +21,11 @@ nfpms:
     homepage: "https://github.com/carlHandy/go-tinyproxy"
     maintainer: "Carl Handy"
     description: "A secure and performant reverse proxy and web server"
-    license: "MIT" # Change if using a different license
+    license: "BSD-3-Clause license"
     formats:
       - deb
       - rpm
+    bindir: /usr/local/bin
     scripts:
       postinstall: packaging/postinstall.sh
       preremove: packaging/preremove.sh
