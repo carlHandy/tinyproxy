@@ -133,3 +133,42 @@ func (rp *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
  
 	p.ServeHTTP(w, r)
 }
+
+// NewSingleBackendProxy creates a reverse proxy targeting a single backend URL.
+// This is used by the load balancer path where the target is chosen at request time.
+func NewSingleBackendProxy(targetURL string) (http.Handler, error) {
+	target, err := url.Parse(targetURL)
+	if err != nil {
+		return nil, err
+	}
+
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   20,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		ForceAttemptHTTP2:     true,
+	}
+
+	p := httputil.NewSingleHostReverseProxy(target)
+	p.Transport = transport
+	p.ErrorHandler = proxyErrorHandler
+
+	originalDirector := p.Director
+	p.Director = func(req *http.Request) {
+		originalDirector(req)
+		req.Header.Set("X-Forwarded-Host", req.Host)
+		req.Header.Set("X-Forwarded-Proto", schemeFromRequest(req))
+		if ip, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
+			req.Header.Set("X-Real-IP", ip)
+		}
+	}
+
+	return p, nil
+}

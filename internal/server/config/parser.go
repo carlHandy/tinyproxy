@@ -2,11 +2,13 @@ package config
 
 import (
     "bufio"
-    "strings"
+    "fmt"
     "io"
     "strconv"
+    "strings"
     "time"
-    "fmt"
+
+    "tinyproxy/internal/loadbalancer"
 )
 
 type Parser struct {
@@ -121,6 +123,10 @@ func (p *Parser) parseLine(line string) error {
         return p.parseFastCGI()
     case "bot_protection":
         return p.parseBotProtection()
+    case "cache":
+        return p.parseCache()
+    case "upstream":
+        return p.parseUpstream()
     }
 
     return nil
@@ -320,4 +326,184 @@ func (p *Parser) parseSocks5() error {
         }
     }
     return nil
+}
+
+func (p *Parser) parseCache() error {
+    for p.scanner.Scan() {
+        p.line++
+        line := strings.TrimSpace(p.scanner.Text())
+
+        if line == "" || strings.HasPrefix(line, "#") {
+            continue
+        }
+        if line == "}" {
+            return nil
+        }
+
+        parts := strings.Fields(line)
+        if len(parts) < 2 {
+            continue
+        }
+
+        switch parts[0] {
+        case "enabled":
+            p.currentVHost.Cache.Enabled = parts[1] == "true"
+        case "max_size":
+            size, err := parseByteSize(parts[1])
+            if err != nil {
+                return fmt.Errorf("cache max_size: %w", err)
+            }
+            p.currentVHost.Cache.MaxSize = size
+        case "default_ttl":
+            d, err := time.ParseDuration(parts[1])
+            if err != nil {
+                return fmt.Errorf("cache default_ttl: %w", err)
+            }
+            p.currentVHost.Cache.DefaultTTL = d
+        case "bypass_header":
+            p.currentVHost.Cache.BypassHeader = parts[1]
+        case "stale_while_revalidate":
+            d, err := time.ParseDuration(parts[1])
+            if err != nil {
+                return fmt.Errorf("cache stale_while_revalidate: %w", err)
+            }
+            p.currentVHost.Cache.StaleWhileRevalidate = d
+        }
+    }
+    return nil
+}
+
+func (p *Parser) parseUpstream() error {
+    for p.scanner.Scan() {
+        p.line++
+        line := strings.TrimSpace(p.scanner.Text())
+
+        if line == "" || strings.HasPrefix(line, "#") {
+            continue
+        }
+        if line == "}" {
+            return nil
+        }
+
+        if strings.HasSuffix(line, "{") {
+            directive := strings.TrimSpace(strings.TrimSuffix(line, "{"))
+            if directive == "health_check" {
+                if err := p.parseHealthCheck(); err != nil {
+                    return err
+                }
+                continue
+            }
+        }
+
+        parts := strings.Fields(line)
+        if len(parts) < 2 {
+            continue
+        }
+
+        switch parts[0] {
+        case "strategy":
+            p.currentVHost.Upstream.Strategy = parts[1]
+        case "cookie_name":
+            p.currentVHost.Upstream.CookieName = parts[1]
+        case "backend":
+            bc := loadbalancer.BackendConfig{
+                URL:    parts[1],
+                Weight: 1,
+            }
+            // Parse optional "weight N"
+            for i := 2; i < len(parts)-1; i++ {
+                if parts[i] == "weight" {
+                    w, err := strconv.Atoi(parts[i+1])
+                    if err != nil {
+                        return fmt.Errorf("upstream backend weight: %w", err)
+                    }
+                    bc.Weight = w
+                }
+            }
+            p.currentVHost.Upstream.Backends = append(p.currentVHost.Upstream.Backends, bc)
+        }
+    }
+    return nil
+}
+
+func (p *Parser) parseHealthCheck() error {
+    // Enable health checking when the block is present
+    p.currentVHost.Upstream.HealthCheck.Enabled = true
+    for p.scanner.Scan() {
+        p.line++
+        line := strings.TrimSpace(p.scanner.Text())
+
+        if line == "" || strings.HasPrefix(line, "#") {
+            continue
+        }
+        if line == "}" {
+            return nil
+        }
+
+        parts := strings.Fields(line)
+        if len(parts) < 2 {
+            continue
+        }
+
+        switch parts[0] {
+        case "path":
+            p.currentVHost.Upstream.HealthCheck.Path = parts[1]
+        case "interval":
+            d, err := time.ParseDuration(parts[1])
+            if err != nil {
+                return fmt.Errorf("health_check interval: %w", err)
+            }
+            p.currentVHost.Upstream.HealthCheck.Interval = d
+        case "timeout":
+            d, err := time.ParseDuration(parts[1])
+            if err != nil {
+                return fmt.Errorf("health_check timeout: %w", err)
+            }
+            p.currentVHost.Upstream.HealthCheck.Timeout = d
+        case "fail_threshold":
+            n, err := strconv.Atoi(parts[1])
+            if err != nil {
+                return fmt.Errorf("health_check fail_threshold: %w", err)
+            }
+            p.currentVHost.Upstream.HealthCheck.FailThreshold = n
+        case "pass_threshold":
+            n, err := strconv.Atoi(parts[1])
+            if err != nil {
+                return fmt.Errorf("health_check pass_threshold: %w", err)
+            }
+            p.currentVHost.Upstream.HealthCheck.PassThreshold = n
+        }
+    }
+    return nil
+}
+
+// parseByteSize parses human-readable byte sizes like "256MB", "1GB", "512KB".
+func parseByteSize(s string) (int64, error) {
+    s = strings.TrimSpace(s)
+    if s == "" {
+        return 0, fmt.Errorf("empty size")
+    }
+
+    multiplier := int64(1)
+    upper := strings.ToUpper(s)
+
+    switch {
+    case strings.HasSuffix(upper, "GB"):
+        multiplier = 1 << 30
+        s = s[:len(s)-2]
+    case strings.HasSuffix(upper, "MB"):
+        multiplier = 1 << 20
+        s = s[:len(s)-2]
+    case strings.HasSuffix(upper, "KB"):
+        multiplier = 1 << 10
+        s = s[:len(s)-2]
+    case strings.HasSuffix(upper, "B"):
+        s = s[:len(s)-1]
+    }
+
+    n, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+    if err != nil {
+        return 0, fmt.Errorf("invalid size %q: %w", s, err)
+    }
+    return n * multiplier, nil
 }
