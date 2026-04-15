@@ -9,26 +9,26 @@ A security-focused reverse proxy and web server — a single-binary alternative 
 
 ## Installation
 
-You can download pre-compiled binaries and packages for your operating system from the [Releases page](https://github.com/carlHandy/tinyproxy/releases).
+You can download pre-compiled binaries and packages for your operating system from the [Releases page](https://github.com/carlHandy/go-tinyproxy/releases).
 
 ### Debian / Ubuntu
-Download the `.deb` package and install it (replace `1.0.0` with the latest version):
+Download the `.deb` package and install it (replace `1.11 with the latest version):
 ```bash
-wget https://github.com/carlHandy/tinyproxy/releases/download/v1.0.0/tinyproxy_1.0.0_linux_amd64.deb
-sudo dpkg -i tinyproxy_1.0.0_linux_amd64.deb
+wget https://github.com/carlHandy/go-tinyproxy/releases/download/v1.1.1/go-tinyproxy_1.1.1_linux_amd64.deb
+sudo dpkg -i go-tinyproxy_1.1.1_linux_amd64.deb
 ```
 
 ### RHEL / Fedora / AlmaLinux
 Download the `.rpm` package and install it (replace `1.0.0` with the latest version):
 ```bash
-wget https://github.com/carlHandy/tinyproxy/releases/download/v1.0.0/tinyproxy_1.0.0_linux_amd64.rpm
+wget https://github.com/carlHandy/go-tinyproxy/releases/download/v1.1.1/tinyproxy_1.1.1_linux_amd64.rpm
 sudo rpm -i tinyproxy_1.0.0_linux_amd64.rpm
 ```
 
 ### macOS / Linux (Standalone Binary)
 Download the `.tar.gz` archive, extract it, and move the binary to your path:
 ```bash
-wget https://github.com/carlHandy/tinyproxy/releases/download/v1.0.0/tinyproxy_1.0.0_linux_amd64.tar.gz
+wget https://github.com/carlHandy/go-tinyproxy/releases/download/v1.1.1/tinyproxy_1.1.1_linux_amd64.tar.gz
 tar -xzf tinyproxy_1.0.0_linux_amd64.tar.gz
 sudo mv tinyproxy /usr/local/bin/
 ```
@@ -49,23 +49,23 @@ If the window still flashes and exits, the most common cause is a missing or inv
 ### Build from Source
 If you prefer to compile it yourself:
 ```bash
-git clone https://github.com/carlHandy/tinyproxy.git
-cd tinyproxy
+git clone https://github.com/carlHandy/go-tinyproxy.git
+cd go-tinyproxy
 go build -o tinyproxy ./cmd/tinyproxy/
 sudo mv tinyproxy /usr/local/bin/
 ```
 
 ## Managing the service
 
-When installed via `.deb` or `.rpm`, tinyproxy runs as a systemd service and starts automatically on boot. Use the built-in CLI to manage it:
+When installed via `.deb` or `.rpm`, go-tinyproxy runs as a systemd service and starts automatically on boot. Use the built-in CLI to manage it:
 
 ```bash
-tinyproxy start      # start the service
-tinyproxy stop       # stop the service
-tinyproxy restart    # restart the service
-tinyproxy reload     # reload config without downtime (sends SIGHUP)
-tinyproxy status     # show service status
-tinyproxy config     # open /etc/tinyproxy/vhosts.conf in $EDITOR (falls back to nano)
+go-tinyproxy start      # start the service
+go-tinyproxy stop       # stop the service
+go-tinyproxy restart    # restart the service
+go-tinyproxy reload     # reload config without downtime (sends SIGHUP)
+go-tinyproxy status     # show service status
+go-tinyproxy config     # open /etc/go-tinyproxy/vhosts.conf in $EDITOR (falls back to nano)
 tinyproxy logs       # tail live logs via journalctl
 tinyproxy upgrade    # download and install the latest release, then restart
 ```
@@ -73,8 +73,8 @@ tinyproxy upgrade    # download and install the latest release, then restart
 After editing the config, apply changes without restarting:
 
 ```bash
-tinyproxy config     # edit the file
-tinyproxy reload     # pick up the changes instantly
+go-tinyproxy config     # edit the file
+go-tinyproxy reload     # pick up the changes instantly
 ```
 
 ## Default page

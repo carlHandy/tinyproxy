@@ -266,7 +266,7 @@ func staticRoot() string {
 	if _, err := os.Stat("static"); err == nil {
 		return "static"
 	}
-	return "/usr/share/tinyproxy/static"
+	return "/usr/share/go-tinyproxy/static"
 }
 
 // certCacheDir returns the directory autocert uses to persist certificates.
@@ -276,17 +276,17 @@ func certCacheDir() string {
 	if _, err := os.Stat("certs"); err == nil {
 		return "certs"
 	}
-	return "/var/cache/tinyproxy/certs"
+	return "/var/cache/go-tinyproxy/certs"
 }
 
-const systemCertCacheDir = "/var/cache/tinyproxy/certs"
+const systemCertCacheDir = "/var/cache/go-tinyproxy/certs"
 
 // configPath returns the active config file path: local first, then system.
 func configPath() string {
 	if _, err := os.Stat("config/vhosts.conf"); err == nil {
 		return "config/vhosts.conf"
 	}
-	return "/etc/tinyproxy/vhosts.conf"
+	return "/etc/go-tinyproxy/vhosts.conf"
 }
 
 func loadConfig(path string) (*config.ServerConfig, error) {
@@ -310,7 +310,7 @@ func loadConfig(path string) (*config.ServerConfig, error) {
 	return cfg, nil
 }
 
-// runServer is the actual server process (used by the systemd service via "tinyproxy serve").
+// runServer is the actual server process (used by the systemd service via "go-tinyproxy serve").
 func runServer() {
 	path := configPath()
 	cfg, err := loadConfig(path)
@@ -375,7 +375,7 @@ func runServer() {
 }
 
 func runSystemctl(action string) {
-	cmd := exec.Command("systemctl", action, "tinyproxy")
+	cmd := exec.Command("systemctl", action, "go-tinyproxy")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -392,13 +392,13 @@ func runOpenConfig() {
 	if err != nil {
 		log.Fatalf("editor %q not found: %v", editor, err)
 	}
-	if err := syscall.Exec(path, []string{editor, "/etc/tinyproxy/vhosts.conf"}, os.Environ()); err != nil {
+	if err := syscall.Exec(path, []string{editor, "/etc/go-tinyproxy/vhosts.conf"}, os.Environ()); err != nil {
 		log.Fatal(err)
 	}
 }
 
 func runLogs() {
-	cmd := exec.Command("journalctl", "-u", "tinyproxy", "-f", "--no-pager")
+	cmd := exec.Command("journalctl", "-u", "go-tinyproxy", "-f", "--no-pager")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()
@@ -449,7 +449,7 @@ func runUpgrade() {
 		}
 	}
 
-	assetName := fmt.Sprintf("tinyproxy_%s_%s_%s.%s", version, goos, goarch, ext)
+	assetName := fmt.Sprintf("go-tinyproxy_%s_%s_%s.%s", version, goos, goarch, ext)
 	var downloadURL string
 	for _, a := range release.Assets {
 		if a.Name == assetName {
@@ -468,7 +468,7 @@ func runUpgrade() {
 	}
 	defer dlResp.Body.Close()
 
-	tmp, err := os.CreateTemp("", "tinyproxy-upgrade-*."+ext)
+	tmp, err := os.CreateTemp("", "go-tinyproxy-upgrade-*."+ext)
 	if err != nil {
 		log.Fatalf("failed to create temp file: %v", err)
 	}
@@ -483,7 +483,7 @@ func runUpgrade() {
 	installFn(tmp.Name())
 
 	log.Println("Restarting service...")
-	mustRun("systemctl", "restart", "tinyproxy")
+	mustRun("systemctl", "restart", "go-tinyproxy")
 	log.Println("Upgrade complete.")
 }
 
@@ -496,14 +496,14 @@ func runSSL() {
 	case "regenerate":
 		runSSLRegenerate()
 	default:
-		fmt.Fprintf(os.Stderr, "Usage: tinyproxy ssl regenerate\n")
+		fmt.Fprintf(os.Stderr, "Usage: go-tinyproxy ssl regenerate\n")
 		os.Exit(1)
 	}
 }
 
 func runSSLRegenerate() {
-	log.Println("Stopping tinyproxy...")
-	mustRun("systemctl", "stop", "tinyproxy")
+	log.Println("Stopping go-tinyproxy...")
+	mustRun("systemctl", "stop", "go-tinyproxy")
 
 	log.Printf("Clearing certificate cache at %s...", systemCertCacheDir)
 	entries, err := os.ReadDir(systemCertCacheDir)
@@ -517,8 +517,8 @@ func runSSLRegenerate() {
 		}
 	}
 
-	log.Println("Starting tinyproxy...")
-	mustRun("systemctl", "start", "tinyproxy")
+	log.Println("Starting go-tinyproxy...")
+	mustRun("systemctl", "start", "go-tinyproxy")
 	log.Println("Done. New certificates will be obtained automatically on the next HTTPS connection.")
 }
 
@@ -564,7 +564,7 @@ func main() {
 	case "ssl":
 		runSSL()
 	default:
-		fmt.Fprintf(os.Stderr, "Usage: tinyproxy {start|stop|restart|reload|status|config|logs|upgrade|ssl}\n")
+		fmt.Fprintf(os.Stderr, "Usage: go-tinyproxy {start|stop|restart|reload|status|config|logs|upgrade|ssl}\n")
 		os.Exit(1)
 	}
 }

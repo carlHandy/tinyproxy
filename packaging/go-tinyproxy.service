@@ -1,18 +1,18 @@
 [Unit]
-Description=tinyproxy - secure reverse proxy and web server
+Description=go-tinyproxy - secure reverse proxy and web server
 After=network.target network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/tinyproxy serve
+ExecStart=/usr/local/bin/go-tinyproxy serve
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5s
 LimitNOFILE=65536
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=tinyproxy
+SyslogIdentifier=go-tinyproxy
 
 [Install]
 WantedBy=multi-user.target

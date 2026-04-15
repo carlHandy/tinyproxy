@@ -1,10 +1,10 @@
 version: 2
 
-project_name: tinyproxy
+project_name: go-tinyproxy
 
 builds:
   - main: ./cmd/tinyproxy/
-    binary: tinyproxy
+    binary: go-tinyproxy
     env:
       - CGO_ENABLED=0
     goos:
@@ -18,7 +18,7 @@ builds:
 # This creates the .deb and .rpm packages for Linux
 nfpms:
   - vendor: "Carl Handy"
-    homepage: "https://github.com/carlHandy/tinyproxy"
+    homepage: "https://github.com/carlHandy/go-tinyproxy"
     maintainer: "Carl Handy"
     description: "A secure and performant reverse proxy and web server"
     license: "MIT" # Change if using a different license
@@ -30,12 +30,12 @@ nfpms:
       preremove: packaging/preremove.sh
     contents:
       - src: config/vhosts.conf
-        dst: /etc/tinyproxy/vhosts.conf
+        dst: /etc/go-tinyproxy/vhosts.conf
         type: config|noreplace
-      - src: packaging/tinyproxy.service
-        dst: /lib/systemd/system/tinyproxy.service
+      - src: packaging/go-tinyproxy.service
+        dst: /etc/systemd/system/go-tinyproxy.service
       - src: static/
-        dst: /usr/share/tinyproxy/static/
+        dst: /usr/share/go-tinyproxy/static/
 
 # This packages Windows and macOS binaries into zip/tar files
 archives:

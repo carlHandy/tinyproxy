@@ -1,4 +1,4 @@
 #!/bin/sh
 set -e
-systemctl stop tinyproxy || true
-systemctl disable tinyproxy || true
+systemctl stop go-tinyproxy || true
+systemctl disable go-tinyproxy || true

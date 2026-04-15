@@ -10,7 +10,7 @@ tinyproxy is a **security-focused reverse proxy and web server** intended as a s
 
 ```bash
 # Build
-go build ./cmd/tinyproxy/
+go build -o go-tinyproxy ./cmd/tinyproxy/
 
 # Run (development — TLS on :8080 using local certs)
 ENV=dev go run ./cmd/tinyproxy/

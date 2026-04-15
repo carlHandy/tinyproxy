@@ -1,6 +1,6 @@
 #!/bin/sh
 set -e
-mkdir -p /var/cache/tinyproxy/certs
+mkdir -p /var/cache/go-tinyproxy/certs
 systemctl daemon-reload
-systemctl enable tinyproxy
-systemctl start tinyproxy
+systemctl enable go-tinyproxy
+systemctl start go-tinyproxy
