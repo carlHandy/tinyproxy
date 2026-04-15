@@ -66,8 +66,8 @@ go-tinyproxy restart    # restart the service
 go-tinyproxy reload     # reload config without downtime (sends SIGHUP)
 go-tinyproxy status     # show service status
 go-tinyproxy config     # open /etc/go-tinyproxy/vhosts.conf in $EDITOR (falls back to nano)
-tinyproxy logs       # tail live logs via journalctl
-tinyproxy upgrade    # download and install the latest release, then restart
+go-tinyproxy logs       # tail live logs via journalctl
+go-tinyproxy upgrade    # download and install the latest release, then restart
 ```
 
 After editing the config, apply changes without restarting:
@@ -109,7 +109,7 @@ ENV=dev go run ./cmd/tinyproxy/
 Production mode listens on `:443` with automatic TLS via Let's Encrypt (ACME), and spins up an HTTP→HTTPS redirect on `:80`.
 
 ```bash
-tinyproxy
+go-tinyproxy
 ```
 *(Note: If not installed via a package manager to run as a service, you may need to run with `sudo` to bind to ports 80 and 443).*
 
