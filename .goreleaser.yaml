@@ -32,7 +32,7 @@ nfpms:
     contents:
       - src: config/vhosts.conf
         dst: /etc/go-tinyproxy/vhosts.conf
-        type: config|noreplace
+        type: config
       - src: packaging/go-tinyproxy.service
         dst: /etc/systemd/system/go-tinyproxy.service
       - src: static/
