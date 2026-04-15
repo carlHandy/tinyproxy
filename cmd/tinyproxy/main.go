@@ -16,13 +16,16 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"tinyproxy/internal/cache"
+	"tinyproxy/internal/fastcgi"
+	"tinyproxy/internal/loadbalancer"
 	"tinyproxy/internal/server/botdetect"
 	"tinyproxy/internal/server/compression"
 	"tinyproxy/internal/server/config"
 	"tinyproxy/internal/server/proxy"
 	"tinyproxy/internal/server/security"
 	"tinyproxy/internal/server/security/certmanager"
-	"tinyproxy/internal/fastcgi"
 )
 
 // peekedConn replays a single already-read byte before delegating to the real connection.
@@ -80,8 +83,41 @@ func (l *sniffingListener) Close() error   { return l.inner.Close() }
 func (l *sniffingListener) Addr() net.Addr { return l.inner.Addr() }
 
 type VHostHandler struct {
-	mu     sync.RWMutex
-	config *config.ServerConfig
+	mu        sync.RWMutex
+	config    *config.ServerConfig
+	caches    map[string]*cache.Cache
+	balancers map[string]*loadbalancer.LoadBalancer
+}
+
+// initSubsystems builds per-vhost caches and load balancers from the current config.
+func (vh *VHostHandler) initSubsystems() {
+	vh.caches = make(map[string]*cache.Cache)
+	vh.balancers = make(map[string]*loadbalancer.LoadBalancer)
+
+	for name, vhost := range vh.config.VHosts {
+		if vhost.Cache.Enabled {
+			vh.caches[name] = cache.New(vhost.Cache.MaxSize)
+			log.Printf("cache enabled for vhost %q (max %d bytes, TTL %s)",
+				name, vhost.Cache.MaxSize, vhost.Cache.DefaultTTL)
+		}
+		if len(vhost.Upstream.Backends) > 0 {
+			lb, err := loadbalancer.New(vhost.Upstream)
+			if err != nil {
+				log.Printf("WARNING: failed to init load balancer for vhost %q: %v", name, err)
+				continue
+			}
+			vh.balancers[name] = lb
+			log.Printf("load balancer enabled for vhost %q (strategy %s, %d backends)",
+				name, vhost.Upstream.Strategy, len(vhost.Upstream.Backends))
+		}
+	}
+}
+
+// stopSubsystems shuts down health checkers for all active load balancers.
+func (vh *VHostHandler) stopSubsystems() {
+	for _, lb := range vh.balancers {
+		lb.Stop()
+	}
 }
 
 func (vh *VHostHandler) reload(configPath string) error {
@@ -95,7 +131,9 @@ func (vh *VHostHandler) reload(configPath string) error {
 		return err
 	}
 	vh.mu.Lock()
+	vh.stopSubsystems()
 	vh.config = newCfg
+	vh.initSubsystems()
 	vh.mu.Unlock()
 	return nil
 }
@@ -103,6 +141,8 @@ func (vh *VHostHandler) reload(configPath string) error {
 func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	vh.mu.RLock()
 	cfg := vh.config
+	caches := vh.caches
+	balancers := vh.balancers
 	vh.mu.RUnlock()
 
 	host := r.Host
@@ -128,13 +168,26 @@ func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Build the core handler (compression wrapping handleVHost)
+		var coreHandler http.Handler
 		if vhost.Compression {
-			compression.Compress(func(w http.ResponseWriter, r *http.Request) {
-				vh.handleVHost(w, r, vhost)
-			})(w, r)
-			return
+			coreHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				compression.Compress(func(w http.ResponseWriter, r *http.Request) {
+					vh.handleVHost(w, r, vhost, balancers[host])
+				})(w, r)
+			})
+		} else {
+			coreHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				vh.handleVHost(w, r, vhost, balancers[host])
+			})
 		}
-		vh.handleVHost(w, r, vhost)
+
+		// Wrap with cache middleware if enabled
+		if c, ok := caches[host]; ok {
+			coreHandler = cache.Handler(vhost.Cache, c)(coreHandler)
+		}
+
+		coreHandler.ServeHTTP(w, r)
 	})
 
 	botHandler := botdetect.BotDetect(botCfg)(inner)
@@ -153,11 +206,36 @@ func (vh *VHostHandler) setSecurityHeaders(w http.ResponseWriter, vhost *config.
 	w.Header().Set("Strict-Transport-Security", vhost.Security.Headers.HSTS)
 }
 
-func (vh *VHostHandler) handleVHost(w http.ResponseWriter, r *http.Request, vhost *config.VirtualHost) {
+func (vh *VHostHandler) handleVHost(w http.ResponseWriter, r *http.Request, vhost *config.VirtualHost, lb *loadbalancer.LoadBalancer) {
 	if vhost.FastCGI.Pass != "" {
 		fastcgi.Handler(w, r, vhost.FastCGI.Pass, vhost.Root, vhost.FastCGI.Index)
 		return
 	}
+
+	// Load-balanced upstream: pick a backend and proxy to it
+	if lb != nil {
+		backend, err := lb.Next(r)
+		if err != nil {
+			log.Printf("load balancer error: %v", err)
+			http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		lb.MarkActive(backend)
+		defer lb.MarkDone(backend)
+
+		// Set sticky-session cookie if strategy requires it
+		lb.SetAffinityCookie(w, backend)
+
+		backendProxy, err := proxy.NewSingleBackendProxy(backend.URL)
+		if err != nil {
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			return
+		}
+		backendProxy.ServeHTTP(w, r)
+		return
+	}
+
+	// Single proxy_pass backend
 	if vhost.ProxyPass != "" {
 		vhosts := []proxy.VHost{
 			{
@@ -241,6 +319,7 @@ func runServer() {
 	}
 
 	handler := &VHostHandler{config: cfg}
+	handler.initSubsystems()
 
 	// SIGHUP → reload config without restarting
 	sigs := make(chan os.Signal, 1)

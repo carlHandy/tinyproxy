@@ -2,6 +2,9 @@ package config
 
 import (
     "time"
+
+    "tinyproxy/internal/cache"
+    "tinyproxy/internal/loadbalancer"
 )
 
 type SecurityConfig struct {
@@ -55,6 +58,8 @@ type VirtualHost struct {
         Params   map[string]string
     }
     BotProtection BotProtectionConfig
+    Cache         cache.CacheConfig
+    Upstream      loadbalancer.LBConfig
 }
 
 func NewVirtualHost() *VirtualHost {
@@ -85,7 +90,8 @@ func NewVirtualHost() *VirtualHost {
             },
         },
         MaxBodySize: 10 << 20, // 10MB default max body size
-
+        Cache:       cache.DefaultCacheConfig(),
+        Upstream:    loadbalancer.DefaultLBConfig(),
     }
     return vh
 }
