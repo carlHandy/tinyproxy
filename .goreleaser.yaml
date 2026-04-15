@@ -39,7 +39,6 @@ nfpms:
         dst: /usr/share/go-tinyproxy/static/
       - src: LICENSE
         dst: /etc/go-tinyproxy/LICENSE
-        type: noreplace
 
 # This packages Windows and macOS binaries into zip/tar files
 archives:
