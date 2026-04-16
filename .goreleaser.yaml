@@ -33,6 +33,9 @@ nfpms:
       - src: config/vhosts.conf
         dst: /etc/go-tinyproxy/vhosts.conf
         type: config
+      - src: config/fingerprints.conf
+        dst: /etc/go-tinyproxy/fingerprints.conf
+        type: config
       - src: packaging/go-tinyproxy.service
         dst: /etc/systemd/system/go-tinyproxy.service
       - src: static/
