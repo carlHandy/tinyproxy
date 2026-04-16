@@ -197,37 +197,45 @@ type Server struct {
 }
 
 // New creates a Server. Returns an error if credentials cannot be loaded.
-func New(cfg Config, db *stats.DB, logbuf *logring.Buffer) (*Server, error) {
-	mux := http.NewServeMux()
+func New(cfg Config, db *stats.DB, logbuf *logring.Buffer, reloadCh chan<- struct{}) (*Server, error) {
+    mux := http.NewServeMux()
 
+    // Create a non-blocking helper function to trigger the reload.
+    // The select with a default case ensures that if the channel is full 
+    // or nothing is actively listening, the HTTP request won't hang forever.
+    triggerReload := func() {
+        if reloadCh != nil {
+            select {
+            case reloadCh <- struct{}{}:
+            default:
+            }
+        }
+    }
 
+    mux.Handle("/api/stats", NewStatsHandler(db))
+    mux.Handle("/api/logs", NewLogsHandler(db))
+    mux.Handle("/api/logs/stream", NewLogsStreamHandler(logbuf))
+    mux.Handle("/api/config", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        switch r.Method {
+        case http.MethodGet:
+            dashconfig.HandleGet(cfg.ConfigPath)(w, r)
+        case http.MethodPut:
+            // Pass the trigger function here instead of syscall.Kill
+            dashconfig.HandlePut(cfg.ConfigPath, triggerReload)(w, r)
+        default:
+            http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+        }
+    }))
+    mux.Handle("/api/config/validate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+            http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+            return
+        }
+        dashconfig.HandleValidate(cfg.ConfigPath)(w, r)
+    }))
 
-	mux.Handle("/api/stats", NewStatsHandler(db))
-	mux.Handle("/api/logs", NewLogsHandler(db))
-	mux.Handle("/api/logs/stream", NewLogsStreamHandler(logbuf))
-	mux.Handle("/api/config", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			dashconfig.HandleGet(cfg.ConfigPath)(w, r)
-		case http.MethodPut:
-			dashconfig.HandlePut(cfg.ConfigPath, func() {
-				syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
-			})(w, r)
-		default:
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		}
-	}))
-	mux.Handle("/api/config/validate", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		dashconfig.HandleValidate(cfg.ConfigPath)(w, r)
-	}))
-
-	RegisterUIHandlers(mux, cfg.ConfigPath, db, func() {
-		syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
-	})
+    // Pass the trigger function here as well
+    RegisterUIHandlers(mux, cfg.ConfigPath, db, triggerReload)
 
 	var handler http.Handler = middleware.Recovery(mux)
 

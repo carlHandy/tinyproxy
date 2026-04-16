@@ -447,6 +447,7 @@ func runServer() {
 	handler.initSubsystems()
 	handler.blocklist = loadFingerprintBlocklist(fingerprintsPath())
 
+	reloadCh := make(chan struct{}, 1)
 	var dashSrv *dashboard.Server
 	if dc.Enabled {
 		db, err := dashstats.Open(dc.DBPath)
@@ -475,26 +476,28 @@ func runServer() {
 			DBPath: dc.DBPath, TLSCert: dc.TLSCert, TLSKey: dc.TLSKey,
 			ConfigPath: path,
 		}
-		dashSrv, err = dashboard.New(dashCfg, db, logbuf)
+		dashSrv, err = dashboard.New(dashCfg, db, logbuf, reloadCh)
 		if err != nil {
 			log.Fatalf("dashboard: %v", err)
 		}
 		dashSrv.Start()
 	}
 
-	// SIGHUP → reload config without restarting
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGHUP)
+	// 3. Keep your existing OS signal setup (for Linux/macOS users running via terminal)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGHUP)
+
+	// 4. Start a dedicated goroutine to listen for both OS signals AND dashboard triggers
 	go func() {
-		for range sigs {
-			if err := handler.reload(path); err != nil {
-				log.Printf("reload failed: %v", err)
-			} else {
-				log.Println("config reloaded")
+		for {
+			select {
+			case <-sigCh:
+				log.Println("Reloading config triggered by OS signal...")
+				reloadAppConfig(handler, path)
+			case <-reloadCh:
+				log.Println("Reloading config triggered by Dashboard API...")
+				reloadAppConfig(handler, path)
 			}
-			handler.mu.Lock()
-			handler.blocklist = loadFingerprintBlocklist(fingerprintsPath())
-			handler.mu.Unlock()
 		}
 	}()
 
@@ -723,6 +726,17 @@ func mustRun(name string, args ...string) {
 	if err := cmd.Run(); err != nil {
 		log.Fatalf("%s failed: %v", name, err)
 	}
+}
+
+func reloadAppConfig(vh *VHostHandler, path string) {
+	if err := vh.reload(path); err != nil {
+		log.Printf("reload failed: %v", err)
+	} else {
+		log.Println("config reloaded")
+	}
+	vh.mu.Lock()
+	vh.blocklist = loadFingerprintBlocklist(fingerprintsPath())
+	vh.mu.Unlock()
 }
 
 func main() {
