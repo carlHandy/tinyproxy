@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -19,7 +20,12 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/term"
 	"tinyproxy/internal/cache"
+	"tinyproxy/internal/dashboard"
+	"tinyproxy/internal/dashboard/logring"
+	dashstats "tinyproxy/internal/dashboard/stats"
 	"tinyproxy/internal/fastcgi"
 	"tinyproxy/internal/loadbalancer"
 	"tinyproxy/internal/server/botdetect"
@@ -116,12 +122,34 @@ func (l *sniffingListener) Accept() (net.Conn, error) {
 func (l *sniffingListener) Close() error   { return l.inner.Close() }
 func (l *sniffingListener) Addr() net.Addr { return l.inner.Addr() }
 
+// responseWriter wraps http.ResponseWriter to capture status code and bytes written.
+type responseWriter struct {
+	http.ResponseWriter
+	status int
+	bytes  int64
+}
+
+func (rw *responseWriter) WriteHeader(status int) {
+	rw.status = status
+	rw.ResponseWriter.WriteHeader(status)
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	if rw.status == 0 {
+		rw.status = http.StatusOK
+	}
+	n, err := rw.ResponseWriter.Write(b)
+	rw.bytes += int64(n)
+	return n, err
+}
+
 type VHostHandler struct {
 	mu        sync.RWMutex
 	config    *config.ServerConfig
 	blocklist map[string]struct{}
 	caches    map[string]*cache.Cache
 	balancers map[string]*loadbalancer.LoadBalancer
+	stats     *dashstats.Collector // nil when dashboard is disabled
 }
 
 // initSubsystems builds per-vhost caches and load balancers from the current config.
@@ -174,11 +202,15 @@ func (vh *VHostHandler) reload(configPath string) error {
 }
 
 func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	rw := &responseWriter{ResponseWriter: w}
+
 	vh.mu.RLock()
 	cfg := vh.config
 	bl := vh.blocklist
 	caches := vh.caches
 	balancers := vh.balancers
+	collector := vh.stats
 	vh.mu.RUnlock()
 
 	host := r.Host
@@ -190,7 +222,7 @@ func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fp := fingerprint.FromContext(r.Context())
 	if fingerprint.IsBlocked(bl, fp) {
 		log.Printf("BLOCKING TLS fingerprint: %s %s JA3=%s JA4=%s", r.Method, r.URL.Path, fp.JA3, fp.JA4)
-		botdetect.Block(w, r, vhost.BotProtection.Honeypot)
+		botdetect.Block(rw, r, vhost.BotProtection.Honeypot)
 		return
 	}
 
@@ -241,7 +273,24 @@ func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	security.RateLimit(
 		vhost.Security.RateLimit.Requests,
 		vhost.Security.RateLimit.Window,
-	)(botHandler).ServeHTTP(w, r)
+	)(botHandler).ServeHTTP(rw, r)
+
+	if collector != nil {
+		host := r.Host
+		if i := strings.LastIndex(host, ":"); i > 0 {
+			host = host[:i]
+		}
+		collector.Record(dashstats.RequestRecord{
+			TS:      time.Now().UnixMilli(),
+			VHost:   host,
+			Method:  r.Method,
+			Path:    r.URL.Path,
+			Status:  rw.status,
+			Latency: time.Since(start).Microseconds(),
+			Bytes:   rw.bytes,
+			Remote:  r.RemoteAddr,
+		})
+	}
 }
 
 func (vh *VHostHandler) setSecurityHeaders(w http.ResponseWriter, vhost *config.VirtualHost) {
@@ -377,15 +426,61 @@ func loadConfig(path string) (*config.ServerConfig, error) {
 
 // runServer is the actual server process (used by the systemd service via "go-tinyproxy serve").
 func runServer() {
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	var dc DashboardConfig
+	registerDashboardFlags(fs, &dc)
+	if len(os.Args) > 2 {
+		fs.Parse(os.Args[2:])
+	}
+
 	path := configPath()
 	cfg, err := loadConfig(path)
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
+	if err := validateDashboardConfig(dc, cfg); err != nil {
+		log.Fatalf("dashboard: %v", err)
+	}
+
 	handler := &VHostHandler{config: cfg}
 	handler.initSubsystems()
 	handler.blocklist = loadFingerprintBlocklist(fingerprintsPath())
+
+	var dashSrv *dashboard.Server
+	if dc.Enabled {
+		db, err := dashstats.Open(dc.DBPath)
+		if err != nil {
+			log.Fatalf("dashboard: failed to open database: %v", err)
+		}
+		logbuf := logring.New(10000, os.Stderr)
+		log.SetOutput(logbuf)
+
+		collector := dashstats.NewCollector(4096)
+		handler.stats = collector
+
+		batchCtx, batchCancel := context.WithCancel(context.Background())
+		defer batchCancel()
+		go db.RunBatchWriter(batchCtx, collector.Chan())
+
+		logSub := logbuf.Subscribe()
+		go func() {
+			for line := range logSub {
+				db.WriteLogLine(line.TS, line.Level, line.Body)
+			}
+		}()
+
+		dashCfg := dashboard.Config{
+			Host: dc.Host, Port: dc.Port, CredsFile: dc.Creds,
+			DBPath: dc.DBPath, TLSCert: dc.TLSCert, TLSKey: dc.TLSKey,
+			ConfigPath: path,
+		}
+		dashSrv, err = dashboard.New(dashCfg, db, logbuf)
+		if err != nil {
+			log.Fatalf("dashboard: %v", err)
+		}
+		dashSrv.Start()
+	}
 
 	// SIGHUP → reload config without restarting
 	sigs := make(chan os.Signal, 1)
@@ -415,6 +510,9 @@ func runServer() {
 		},
 	}
 
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
 	if os.Getenv("ENV") == "dev" {
 		tlsCfg := security.SecureTLSConfig()
 		cert, err := tls.LoadX509KeyPair("certs/localhost+2.pem", "certs/localhost+2-key.pem")
@@ -429,28 +527,40 @@ func runServer() {
 			log.Fatal(err)
 		}
 		fmt.Println("Development mode: Listening on :8080 (HTTP redirects to HTTPS automatically)")
-		if err := server.Serve(&sniffingListener{inner: tcpLn, tlsCfg: tlsCfg}); err != nil {
-			log.Fatal(err)
-		}
-		return
+		go func() {
+			if err := server.Serve(&sniffingListener{inner: tcpLn, tlsCfg: tlsCfg}); err != nil && err != http.ErrServerClosed {
+				log.Println("Dev server error:", err)
+			}
+		}()
+	} else {
+		// Production — one shared cert manager so HTTP-01 challenge tokens are visible
+		// to both the port-80 handler and the port-443 TLS handshake.
+		mgr := certmanager.NewManager(cfg, certCacheDir())
+		server.Addr = ":443"
+		server.TLSConfig = mgr.TLSConfig()
+
+		go func() {
+			if err := http.ListenAndServe(":80", mgr.HTTPHandler(nil)); err != nil {
+				log.Printf("HTTP listener: %v", err)
+			}
+		}()
+
+		fmt.Printf("Production mode: Listening on %s\n", server.Addr)
+		go func() {
+			if err := server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+				log.Println("Prod server error:", err)
+			}
+		}()
 	}
 
-	// Production — one shared cert manager so HTTP-01 challenge tokens are visible
-	// to both the port-80 handler and the port-443 TLS handshake.
-	mgr := certmanager.NewManager(cfg, certCacheDir())
-	server.Addr = ":443"
-	server.TLSConfig = mgr.TLSConfig()
-
-	go func() {
-		if err := http.ListenAndServe(":80", mgr.HTTPHandler(nil)); err != nil {
-			log.Printf("HTTP listener: %v", err)
-		}
-	}()
-
-	fmt.Printf("Production mode: Listening on %s\n", server.Addr)
-	if err := server.ListenAndServeTLS("", ""); err != nil {
-		log.Fatal(err)
+	// Graceful shutdown
+	<-quit
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if dashSrv != nil {
+		dashSrv.Shutdown(ctx)
 	}
+	server.Shutdown(ctx)
 }
 
 func runSystemctl(action string) {
@@ -642,8 +752,45 @@ func main() {
 		runUpgrade()
 	case "ssl":
 		runSSL()
+	case "dashboard":
+		sub := ""
+		if len(os.Args) > 2 {
+			sub = os.Args[2]
+		}
+		switch sub {
+		case "passwd":
+			runDashboardPasswd()
+		default:
+			fmt.Fprintf(os.Stderr, "Usage: go-tinyproxy dashboard passwd\n")
+			os.Exit(1)
+		}
 	default:
-		fmt.Fprintf(os.Stderr, "Usage: go-tinyproxy {start|stop|restart|reload|status|config|logs|upgrade|ssl}\n")
+		fmt.Fprintf(os.Stderr, "Usage: go-tinyproxy {serve|start|stop|restart|reload|status|config|logs|upgrade|ssl|dashboard}\n")
 		os.Exit(1)
 	}
+}
+
+func runDashboardPasswd() {
+	fmt.Print("Username: ")
+	var username string
+	fmt.Scanln(&username)
+	if username == "" {
+		log.Fatal("username cannot be empty")
+	}
+
+	fmt.Print("Password: ")
+	pw, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println()
+	if err != nil {
+		log.Fatalf("failed to read password: %v", err)
+	}
+	if len(pw) == 0 {
+		log.Fatal("password cannot be empty")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword(pw, bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatalf("failed to hash password: %v", err)
+	}
+	fmt.Printf("%s:%s\n", username, hash)
 }

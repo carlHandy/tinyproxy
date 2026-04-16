@@ -1,0 +1,83 @@
+<div id="config-content">
+    <div class="flex items-center justify-between mb-8">
+        <h2 class="text-xl font-bold text-gray-100">Server Configuration</h2>
+        <div class="inline-flex rounded-lg border border-gray-800 p-1 bg-gray-900/50">
+            <button hx-get="/config?tab=visual" hx-target="#config-content" 
+                    class="px-5 py-1.5 rounded-md text-xs font-bold transition-all {{if eq .Tab "visual"}}bg-indigo-600 text-white shadow-sm{{else}}text-gray-500 hover:text-gray-300 hover:bg-gray-800{{end}}">
+                Visual View
+            </button>
+            <button hx-get="/config?tab=raw" hx-target="#config-content" 
+                    class="px-5 py-1.5 rounded-md text-xs font-bold transition-all {{if eq .Tab "raw"}}bg-indigo-600 text-white shadow-sm{{else}}text-gray-500 hover:text-gray-300 hover:bg-gray-800{{end}}">
+                Raw Editor
+            </button>
+        </div>
+    </div>
+
+    {{if eq .Tab "visual"}}
+        <div id="config-visual" class="space-y-6">
+            {{if not .VHosts}}
+                <div class="bg-gray-900/30 border border-gray-800 border-dashed rounded-xl p-12 text-center">
+                    <div class="text-gray-500 font-medium">No virtual hosts are currently configured.</div>
+                </div>
+            {{else}}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {{range $name, $vh := .VHosts}}
+                    <div class="bg-gray-900/50 border border-gray-800 rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center justify-between mb-4 pb-3 border-b border-gray-800">
+                            <span class="text-indigo-400 font-bold tracking-wide">{{$name}}</span>
+                            <span class="text-[10px] bg-indigo-900/30 text-indigo-400 px-2 py-0.5 rounded border border-indigo-500/20 font-bold uppercase tracking-wider">Active</span>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="flex flex-col gap-1.5">
+                                <span class="text-[11px] text-gray-500 font-bold uppercase tracking-widest">Proxy Target</span>
+                                <div class="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 font-mono truncate">{{if $vh.ProxyPass}}{{$vh.ProxyPass}}{{else}}<span class="italic text-gray-600">None</span>{{end}}</div>
+                            </div>
+                            <div class="flex flex-col gap-1.5">
+                                <span class="text-[11px] text-gray-500 font-bold uppercase tracking-widest">Static Root</span>
+                                <div class="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 font-mono truncate">{{if $vh.Root}}{{$vh.Root}}{{else}}<span class="italic text-gray-600">None</span>{{end}}</div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="flex flex-col gap-1.5">
+                                    <span class="text-[11px] text-gray-500 font-bold uppercase tracking-widest">Rate Limit</span>
+                                    <div class="bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 font-mono">{{if $vh.Security}}{{if $vh.Security.RateLimit}}{{$vh.Security.RateLimit.Requests}} <span class="text-[10px] text-gray-600 uppercase tracking-tighter ml-1">Req/Min</span>{{else}}∞{{end}}{{else}}∞{{end}}</div>
+                                </div>
+                                <div class="flex flex-col gap-1.5">
+                                    <span class="text-[11px] text-gray-500 font-bold uppercase tracking-widest">Bot Protection</span>
+                                    <div class="flex items-center h-full px-1">
+                                        {{if and $vh.BotProtection $vh.BotProtection.Enabled}}
+                                            <span class="text-[11px] text-green-400 font-bold border border-green-500/20 bg-green-950/20 px-2 py-0.5 rounded uppercase">Enabled</span>
+                                        {{else}}
+                                            <span class="text-[11px] text-gray-600 font-bold border border-gray-800 bg-gray-900/20 px-2 py-0.5 rounded uppercase">Disabled</span>
+                                        {{end}}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {{end}}
+                </div>
+                <div class="flex items-center gap-3 bg-indigo-900/10 border border-indigo-500/20 rounded-lg p-4 mt-8">
+                    <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <p class="text-xs text-indigo-300/80 leading-relaxed font-medium">The Visual View is currently read-only. For direct modifications, please utilize the <button onclick="htmx.trigger('#config-content', 'htmx:get', {url: '/config?tab=raw'})" class="text-indigo-400 font-bold hover:underline">Raw Editor</button>.</p>
+                </div>
+            {{end}}
+        </div>
+    {{else}}
+        <div id="config-raw" class="fade-in">
+            <div class="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden shadow-2xl">
+                <form hx-post="/config/validate" hx-target="#cfg-diff-container" hx-swap="innerHTML">
+                    <div class="bg-gray-900 border-b border-gray-800 px-6 py-3 flex justify-between items-center">
+                        <span class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">vhosts.conf</span>
+                        <div class="flex gap-4">
+                             <span class="text-[10px] text-indigo-400/50 font-mono">YAML / CONFIG</span>
+                        </div>
+                    </div>
+                    <textarea name="rawConfig" class="bg-gray-950 border-none rounded-none px-6 py-6 text-[13px] font-mono text-gray-300 w-full h-[600px] resize-y focus:outline-none focus:ring-0 leading-relaxed custom-scrollbar">{{.RawConfig}}</textarea>
+                    <div id="cfg-diff-container" class="p-6 bg-gray-900/50 border-t border-gray-800 min-h-[100px] flex items-center">
+                        <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold shadow-lg transition-all transform hover:-translate-y-0.5">Validate & Preview Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    {{end}}
+</div>
