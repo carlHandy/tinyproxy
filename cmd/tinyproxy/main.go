@@ -31,6 +31,9 @@ import (
 	"tinyproxy/internal/server/security/certmanager"
 )
 
+// maxTLSRecordBody is the maximum TLS record payload size per RFC 5246 §6.2.1.
+const maxTLSRecordBody = 16384
+
 // fingerprintConn replays buffered bytes before delegating reads to the underlying conn.
 // For TLS connections it holds the full ClientHello record so that both the TLS
 // handshake and the fingerprint computation receive the same bytes.
@@ -70,6 +73,7 @@ func (l *sniffingListener) Accept() (net.Conn, error) {
 		_, err = io.ReadFull(conn, hdr)
 		conn.SetReadDeadline(time.Time{})
 		if err != nil {
+			log.Printf("fingerprint: failed to read TLS header from %s: %v", conn.RemoteAddr(), err)
 			conn.Close()
 			continue
 		}
@@ -83,7 +87,7 @@ func (l *sniffingListener) Accept() (net.Conn, error) {
 
 		// TLS — read the rest of the record body.
 		recordLen := int(binary.BigEndian.Uint16(hdr[3:5]))
-		if recordLen > 16384 { // max TLS record size
+		if recordLen > maxTLSRecordBody {
 			conn.Close()
 			continue
 		}
@@ -92,11 +96,14 @@ func (l *sniffingListener) Accept() (net.Conn, error) {
 		_, err = io.ReadFull(conn, body)
 		conn.SetReadDeadline(time.Time{})
 		if err != nil {
+			log.Printf("fingerprint: failed to read TLS record body from %s: %v", conn.RemoteAddr(), err)
 			conn.Close()
 			continue
 		}
 
-		buf := append(hdr, body...)
+		buf := make([]byte, 5+recordLen)
+		copy(buf, hdr)
+		copy(buf[5:], body)
 		fc := &fingerprintConn{
 			Conn: conn,
 			buf:  buf,
