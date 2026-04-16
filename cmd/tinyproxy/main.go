@@ -119,6 +119,7 @@ func (l *sniffingListener) Addr() net.Addr { return l.inner.Addr() }
 type VHostHandler struct {
 	mu        sync.RWMutex
 	config    *config.ServerConfig
+	blocklist map[string]struct{}
 	caches    map[string]*cache.Cache
 	balancers map[string]*loadbalancer.LoadBalancer
 }
@@ -175,9 +176,16 @@ func (vh *VHostHandler) reload(configPath string) error {
 func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	vh.mu.RLock()
 	cfg := vh.config
+	bl := vh.blocklist
 	caches := vh.caches
 	balancers := vh.balancers
 	vh.mu.RUnlock()
+
+	fp := fingerprint.FromContext(r.Context())
+	if fingerprint.IsBlocked(bl, fp) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 
 	host := r.Host
 	vhost, exists := cfg.VHosts[host]
@@ -196,6 +204,9 @@ func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		vh.setSecurityHeaders(w, vhost)
+		if fp.JA3 != "" {
+			log.Printf("%s %s JA3=%s JA4=%s", r.Method, r.URL.Path, fp.JA3, fp.JA4)
+		}
 
 		if !exists {
 			vh.handleDefaultVHost(w, r)
@@ -323,6 +334,25 @@ func configPath() string {
 	return "/etc/go-tinyproxy/vhosts.conf"
 }
 
+// fingerprintsPath returns the active fingerprints config path: local first, then system.
+func fingerprintsPath() string {
+	if _, err := os.Stat("config/fingerprints.conf"); err == nil {
+		return "config/fingerprints.conf"
+	}
+	return "/etc/go-tinyproxy/fingerprints.conf"
+}
+
+// loadFingerprintBlocklist loads config/fingerprints.conf (or system path).
+// Returns an empty blocklist without error if the file does not exist.
+func loadFingerprintBlocklist(path string) map[string]struct{} {
+	f, err := os.Open(path)
+	if err != nil {
+		return make(map[string]struct{})
+	}
+	defer f.Close()
+	return fingerprint.LoadBlocklist(f)
+}
+
 func loadConfig(path string) (*config.ServerConfig, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -354,6 +384,7 @@ func runServer() {
 
 	handler := &VHostHandler{config: cfg}
 	handler.initSubsystems()
+	handler.blocklist = loadFingerprintBlocklist(fingerprintsPath())
 
 	// SIGHUP → reload config without restarting
 	sigs := make(chan os.Signal, 1)
@@ -365,6 +396,9 @@ func runServer() {
 			} else {
 				log.Println("config reloaded")
 			}
+			handler.mu.Lock()
+			handler.blocklist = loadFingerprintBlocklist(fingerprintsPath())
+			handler.mu.Unlock()
 		}
 	}()
 
