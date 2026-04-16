@@ -189,6 +189,7 @@ func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	fp := fingerprint.FromContext(r.Context())
 	if fingerprint.IsBlocked(bl, fp) {
+		log.Printf("BLOCKING TLS fingerprint: %s %s JA3=%s JA4=%s", r.Method, r.URL.Path, fp.JA3, fp.JA4)
 		botdetect.Block(w, r, vhost.BotProtection.Honeypot)
 		return
 	}
