@@ -116,3 +116,151 @@ func (d *DB) WriteLogLine(ts int64, level, body string) error {
 	_, err := d.db.Exec(`INSERT INTO log_lines (ts,level,body) VALUES (?,?,?)`, ts, level, body)
 	return err
 }
+
+// StatsResult is the payload for GET /api/stats.
+type StatsResult struct {
+	Window        string           `json:"window"`
+	TotalRequests int64            `json:"total_requests"`
+	ErrorRate     float64          `json:"error_rate"`
+	AvgLatencyUS  float64          `json:"avg_latency_us"`
+	TotalBytes    int64            `json:"total_bytes"`
+	RPSSeries     []RPSPoint       `json:"rps_series"`
+	TopVHosts     []CountEntry     `json:"top_vhosts"`
+	TopPaths      []CountEntry     `json:"top_paths"`
+	StatusCodes   map[string]int64 `json:"status_codes"`
+	TopIPs        []CountEntry     `json:"top_ips"`
+}
+
+// RPSPoint is one data point in the requests-per-second time series.
+type RPSPoint struct {
+	TS  int64   `json:"ts"`
+	RPS float64 `json:"rps"`
+}
+
+// CountEntry is a key + count pair used for ranked lists.
+type CountEntry struct {
+	Key   string `json:"key"`
+	Count int64  `json:"count"`
+}
+
+// LogLine is a single persisted log entry.
+type LogLine struct {
+	TS    int64  `json:"ts"`
+	Level string `json:"level"`
+	Body  string `json:"body"`
+}
+
+// WriteRequestDirect is a test helper that bypasses the batch writer.
+func (d *DB) WriteRequestDirect(r RequestRecord) error {
+	_, err := d.db.Exec(
+		`INSERT INTO requests (ts,vhost,method,path,status,latency,bytes,remote) VALUES (?,?,?,?,?,?,?,?)`,
+		r.TS, r.VHost, r.Method, r.Path, r.Status, r.Latency, r.Bytes, r.Remote)
+	return err
+}
+
+// QueryStats returns aggregated traffic statistics for the given window.
+func (d *DB) QueryStats(window time.Duration) (*StatsResult, error) {
+	since := time.Now().Add(-window).UnixMilli()
+	result := &StatsResult{
+		Window:      window.String(),
+		StatusCodes: make(map[string]int64),
+	}
+
+	row := d.db.QueryRow(`
+		SELECT COUNT(*),
+		       COALESCE(CAST(SUM(CASE WHEN status >= 500 THEN 1 ELSE 0 END) AS REAL) / MAX(CAST(COUNT(*) AS REAL), 1), 0),
+		       COALESCE(AVG(CAST(latency AS REAL)), 0),
+		       COALESCE(SUM(bytes), 0)
+		FROM requests WHERE ts >= ?`, since)
+	if err := row.Scan(&result.TotalRequests, &result.ErrorRate, &result.AvgLatencyUS, &result.TotalBytes); err != nil {
+		return nil, err
+	}
+
+	// RPS series — 1-minute buckets
+	bucketMs := int64(60 * 1000)
+	rows, err := d.db.Query(`
+		SELECT (ts / ?) * ? AS bucket, CAST(COUNT(*) AS REAL) / 60.0
+		FROM requests WHERE ts >= ?
+		GROUP BY bucket ORDER BY bucket`, bucketMs, bucketMs, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var p RPSPoint
+		rows.Scan(&p.TS, &p.RPS)
+		result.RPSSeries = append(result.RPSSeries, p)
+	}
+
+	result.TopVHosts, err = d.queryTopN(`SELECT vhost, COUNT(*) FROM requests WHERE ts >= ? GROUP BY vhost ORDER BY COUNT(*) DESC LIMIT 10`, since)
+	if err != nil {
+		return nil, err
+	}
+	result.TopPaths, err = d.queryTopN(`SELECT path, COUNT(*) FROM requests WHERE ts >= ? GROUP BY path ORDER BY COUNT(*) DESC LIMIT 10`, since)
+	if err != nil {
+		return nil, err
+	}
+
+	rows2, err := d.db.Query(`SELECT CAST(status AS TEXT), COUNT(*) FROM requests WHERE ts >= ? GROUP BY status`, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows2.Close()
+	for rows2.Next() {
+		var code string
+		var count int64
+		rows2.Scan(&code, &count)
+		result.StatusCodes[code] = count
+	}
+
+	result.TopIPs, err = d.queryTopN(`SELECT remote, COUNT(*) FROM requests WHERE ts >= ? GROUP BY remote ORDER BY COUNT(*) DESC LIMIT 10`, since)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (d *DB) queryTopN(query string, args ...any) ([]CountEntry, error) {
+	rows, err := d.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var entries []CountEntry
+	for rows.Next() {
+		var e CountEntry
+		rows.Scan(&e.Key, &e.Count)
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
+// QueryLogs returns log lines ordered by ts DESC, with optional filters.
+// before=0 means most recent. Empty level or vhost disables those filters.
+func (d *DB) QueryLogs(before int64, limit int, vhost, level string) ([]LogLine, error) {
+	q := `SELECT ts, level, body FROM log_lines WHERE 1=1`
+	var args []any
+	if before > 0 {
+		q += ` AND ts < ?`
+		args = append(args, before)
+	}
+	if level != "" {
+		q += ` AND level = ?`
+		args = append(args, level)
+	}
+	q += ` ORDER BY ts DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := d.db.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var lines []LogLine
+	for rows.Next() {
+		var l LogLine
+		rows.Scan(&l.TS, &l.Level, &l.Body)
+		lines = append(lines, l)
+	}
+	return lines, nil
+}

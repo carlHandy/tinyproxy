@@ -1,0 +1,83 @@
+<div id="traffic-content">
+    <div class="flex items-center justify-between mb-8">
+        <h2 class="text-xl font-bold text-gray-100">Traffic Analysis</h2>
+        <div class="inline-flex rounded-lg border border-gray-800 p-1 bg-gray-900/50">
+            {{range $w := .Windows}}
+                <button hx-get="/traffic?window={{$w}}" hx-target="#traffic-content" 
+                        class="px-4 py-1.5 rounded-md text-xs font-bold transition-all {{if eq $.Window $w}}bg-indigo-600 text-white shadow-sm{{else}}text-gray-500 hover:text-gray-300 hover:bg-gray-800{{end}}">
+                    {{$w}}
+                </button>
+            {{end}}
+        </div>
+    </div>
+    
+    <div class="grid grid-cols-2 gap-8">
+        <div class="bg-gray-900/30 border border-gray-800 rounded-xl p-6">
+            <div class="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-6 border-b border-gray-800 pb-2">Top Virtual Hosts</div>
+            {{if .Stats.TopVHosts}}
+                <div class="space-y-3">
+                {{range .Stats.TopVHosts}}
+                    <div class="flex justify-between items-center text-sm py-1 group">
+                        <span class="text-gray-300 truncate max-w-xs group-hover:text-white transition-colors">{{.Key}}</span>
+                        <span class="text-indigo-400 font-mono">{{.Count}}</span>
+                    </div>
+                {{end}}
+                </div>
+            {{else}}
+                <div class="flex flex-col items-center justify-center py-10">
+                    <div class="text-gray-600 text-sm">No traffic data captured for this window.</div>
+                </div>
+            {{end}}
+        </div>
+        
+        <div class="bg-gray-900/30 border border-gray-800 rounded-xl p-6">
+            <div class="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-6 border-b border-gray-800 pb-2">Top Request Paths</div>
+            {{if .Stats.TopPaths}}
+                <div class="space-y-3">
+                {{range .Stats.TopPaths}}
+                    <div class="flex justify-between items-center text-sm py-1 group">
+                        <span class="text-gray-400 truncate max-w-xs group-hover:text-gray-200 transition-colors">{{.Key}}</span>
+                        <span class="text-indigo-400 font-mono">{{.Count}}</span>
+                    </div>
+                {{end}}
+                </div>
+            {{else}}
+                <div class="flex flex-col items-center justify-center py-10">
+                    <div class="text-gray-600 text-sm">No path data available.</div>
+                </div>
+            {{end}}
+        </div>
+        
+        <div class="bg-gray-900/30 border border-gray-800 rounded-xl p-6">
+            <div class="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-6 border-b border-gray-800 pb-2">HTTP Status Codes</div>
+            {{if .StatusCodesList}}
+                <div class="space-y-3">
+                {{range .StatusCodesList}}
+                    <div class="flex justify-between items-center text-sm py-1">
+                        <span class="font-mono px-2 py-0.5 rounded-md bg-gray-950 border border-gray-800 {{.ColorClass}}">{{.Code}}</span>
+                        <span class="text-gray-300 font-mono">{{.Count}}</span>
+                    </div>
+                {{end}}
+                </div>
+            {{else}}
+                <div class="text-center py-10 text-gray-600 text-sm italic">No responses recorded.</div>
+            {{end}}
+        </div>
+        
+        <div class="bg-gray-900/30 border border-gray-800 rounded-xl p-6">
+            <div class="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-6 border-b border-gray-800 pb-2">Top Remote IPs</div>
+            {{if .Stats.TopIPs}}
+                <div class="space-y-3">
+                {{range .Stats.TopIPs}}
+                    <div class="flex justify-between items-center text-sm py-1 group">
+                        <span class="text-gray-400 font-mono group-hover:text-indigo-300 transition-colors">{{.Key}}</span>
+                        <span class="text-indigo-400 font-mono">{{.Count}}</span>
+                    </div>
+                {{end}}
+                </div>
+            {{else}}
+                <div class="text-center py-10 text-gray-600 text-sm">No remote client data.</div>
+            {{end}}
+        </div>
+    </div>
+</div>

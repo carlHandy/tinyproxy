@@ -1,0 +1,52 @@
+<div id="overview-content" hx-get="/overview" hx-trigger="every 10s" hx-swap="outerHTML">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-gray-100">Performance Overview</h2>
+        <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            <span class="text-xs text-gray-500 font-medium uppercase tracking-wider">Live Updates</span>
+        </div>
+    </div>
+    
+    <div class="grid grid-cols-4 gap-6 mb-8">
+        <div class="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-6 hover:border-indigo-500/30 transition-colors shadow-sm">
+            <div class="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-2">Total Requests</div>
+            <div class="text-3xl font-extrabold text-white">{{.TotalRequests}}</div>
+        </div>
+        <div class="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-6 hover:border-red-500/30 transition-colors shadow-sm">
+            <div class="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-2">Error Rate</div>
+            <div class="text-3xl font-extrabold {{if gt .ErrorRatePct 5.0}}text-red-500{{else}}text-red-400{{end}}">{{printf "%.1f" .ErrorRatePct}}%</div>
+        </div>
+        <div class="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-6 hover:border-indigo-500/30 transition-colors shadow-sm">
+            <div class="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-2">Avg Latency</div>
+            <div class="text-3xl font-extrabold text-white">{{printf "%.1f" .AvgLatencyMs}} <span class="text-sm font-medium text-gray-500">ms</span></div>
+        </div>
+        <div class="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-xl p-6 hover:border-indigo-500/30 transition-colors shadow-sm">
+            <div class="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-2">Bandwidth</div>
+            <div class="text-3xl font-extrabold text-white">{{printf "%.2f" .BandwidthMB}} <span class="text-sm font-medium text-gray-500">MB</span></div>
+        </div>
+    </div>
+    
+    <div class="bg-gray-900/30 backdrop-blur-sm border border-gray-800 rounded-xl p-8 shadow-inner">
+        <div class="flex items-center justify-between mb-6">
+            <div class="text-xs text-gray-500 font-bold uppercase tracking-widest">Requests / min (last 60 min)</div>
+        </div>
+        <div class="h-64 relative">
+            <svg viewBox="0 0 800 200" preserveAspectRatio="none" class="w-full h-full">
+                <defs>
+                    <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(129, 140, 248, 0.2)" />
+                        <stop offset="100%" stop-color="rgba(129, 140, 248, 0)" />
+                    </linearGradient>
+                </defs>
+                {{if .SVGArea}}
+                    <path d="{{.SVGArea}}" fill="url(#chart-gradient)" />
+                {{end}}
+                {{if .SVGPath}}
+                    <path d="{{.SVGPath}}" fill="none" stroke="#818cf8" stroke-width="2" vector-effect="non-scaling-stroke" />
+                {{else}}
+                    <text x="400" y="100" text-anchor="middle" class="fill-gray-600 text-xs italic">No movement detected</text>
+                {{end}}
+            </svg>
+        </div>
+    </div>
+</div>

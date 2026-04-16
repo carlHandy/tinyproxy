@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>tinyproxy dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/sse.js" defer></script>
+</head>
+<body class="h-full flex bg-[#030712] text-gray-100 font-sans antialiased">
+    <aside class="w-56 shrink-0 bg-[#0f172a] border-r border-gray-800 flex flex-col shadow-lg z-10">
+        <div class="px-5 py-6 border-b border-gray-800 flex items-center gap-3">
+            <span class="w-8 h-8 rounded bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">t</span>
+            <span class="text-sm font-bold text-gray-200 tracking-widest uppercase">tinyproxy</span>
+        </div>
+        <nav class="flex-1 px-3 py-6 space-y-2" hx-target="#main-content" hx-swap="innerHTML" hx-push-url="true">
+            <a href="/overview" class="nav-link block px-4 py-2.5 rounded-md text-sm font-medium {{if eq .ActiveTab "overview"}}text-indigo-400 bg-indigo-900/30 border border-indigo-500/20 shadow-sm{{else}}text-gray-400 hover:text-gray-200 hover:bg-gray-800/80 transition-colors{{end}}" hx-get="/overview">Overview</a>
+            <a href="/traffic" class="nav-link block px-4 py-2.5 rounded-md text-sm font-medium {{if eq .ActiveTab "traffic"}}text-indigo-400 bg-indigo-900/30 border border-indigo-500/20 shadow-sm{{else}}text-gray-400 hover:text-gray-200 hover:bg-gray-800/80 transition-colors{{end}}" hx-get="/traffic">Traffic</a>
+            <a href="/logs" class="nav-link block px-4 py-2.5 rounded-md text-sm font-medium {{if eq .ActiveTab "logs"}}text-indigo-400 bg-indigo-900/30 border border-indigo-500/20 shadow-sm{{else}}text-gray-400 hover:text-gray-200 hover:bg-gray-800/80 transition-colors{{end}}" hx-get="/logs">Logs</a>
+            <a href="/config" class="nav-link block px-4 py-2.5 rounded-md text-sm font-medium {{if eq .ActiveTab "config"}}text-indigo-400 bg-indigo-900/30 border border-indigo-500/20 shadow-sm{{else}}text-gray-400 hover:text-gray-200 hover:bg-gray-800/80 transition-colors{{end}}" hx-get="/config">Config</a>
+        </nav>
+        <div class="px-5 py-4 border-t border-gray-800">
+            <div class="text-[11px] font-medium text-gray-500 uppercase tracking-widest text-center">go-tinyproxy</div>
+        </div>
+    </aside>
+    <main id="main-content" class="flex-1 overflow-auto p-8">
+        {{.Content}}
+    </main>
+    <script>
+        document.body.addEventListener('htmx:afterOnLoad', function(evt) {
+            if (evt.detail.target.id === 'main-content') {
+                var path = evt.detail.elt.getAttribute('hx-get');
+                if (path) {
+                    document.querySelectorAll('.nav-link').forEach(function(link) {
+                        var linkPath = link.getAttribute('hx-get');
+                        if (linkPath === path) {
+                            link.className = "nav-link block px-4 py-2.5 rounded-md text-sm font-medium text-indigo-400 bg-indigo-900/30 border border-indigo-500/20 shadow-sm";
+                        } else {
+                            link.className = "nav-link block px-4 py-2.5 rounded-md text-sm font-medium text-gray-400 hover:text-gray-200 hover:bg-gray-800/80 transition-colors";
+                        }
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

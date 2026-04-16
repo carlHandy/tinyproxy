@@ -1,0 +1,77 @@
+<div class="flex flex-col h-full">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-xl font-bold text-gray-100">Live Proxy Logs</h2>
+        <div class="flex items-center gap-4">
+            <select class="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm text-gray-200 outline-none focus:border-indigo-500 transition-colors shadow-sm" hx-get="/logs" hx-target="#main-content" name="level">
+                <option value="" {{if eq .Level ""}}selected{{end}}>All Log Levels</option>
+                <option value="info" {{if eq .Level "info"}}selected{{end}}>INFO</option>
+                <option value="error" {{if eq .Level "error"}}selected{{end}}>ERROR</option>
+            </select>
+            <label class="flex items-center gap-2 text-xs text-gray-500 font-bold uppercase tracking-wider cursor-pointer group">
+                <input type="checkbox" id="auto-scroll" checked class="w-4 h-4 rounded border-gray-700 bg-gray-900 text-indigo-600 focus:ring-indigo-500"> 
+                <span class="group-hover:text-gray-300 transition-colors">Auto-scroll</span>
+            </label>
+            <button onclick="document.getElementById('log-output').innerHTML = ''" class="text-xs text-red-500/70 hover:text-red-500 font-bold uppercase tracking-wider transition-colors">Clear</button>
+        </div>
+    </div>
+    
+    <div class="flex-1 bg-gray-950/80 backdrop-blur-sm border border-gray-800 rounded-xl overflow-hidden shadow-2xl">
+        <div id="log-output" class="h-[700px] overflow-y-auto p-4 text-[13px] font-mono space-y-1.5 custom-scrollbar" hx-ext="sse" sse-connect="/api/logs/stream?level={{.Level}}" sse-swap="message" hx-swap="beforeend">
+            {{range .History}}
+                <div class="py-0.5 border-l-2 pl-3 transition-colors hover:bg-white/5 whitespace-pre-wrap break-all {{if eq .Level "error"}}text-red-400 border-red-500/50{{else}}text-gray-300 border-indigo-500/30{{end}}">
+                    <span class="text-gray-600 mr-3 shrink-0">[{{.TS}}]</span>
+                    <span>{{.Body}}</span>
+                </div>
+            {{else}}
+                <div class="text-gray-600 italic py-2">Establishing stream connection...</div>
+            {{end}}
+        </div>
+    </div>
+    
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #374151; }
+    </style>
+
+    <script>
+        document.body.addEventListener('htmx:sseMessage', function(e) {
+            var output = document.getElementById('log-output');
+            if (output && output.contains(e.target)) {
+                try {
+                    var data = JSON.parse(e.detail.data);
+                    var div = document.createElement('div');
+                    var ts = new Date(data.ts).toLocaleTimeString();
+                    
+                    div.className = 'py-0.5 border-l-2 pl-3 transition-colors hover:bg-white/5 whitespace-pre-wrap break-all';
+                    const levelClass = data.level === 'error' ? 'text-red-400 border-red-500/50' : 'text-gray-300 border-indigo-500/30';
+                    div.classList.add(...levelClass.split(' '));
+                    
+                    const spanTs = document.createElement('span');
+                    spanTs.className = 'text-gray-600 mr-3 shrink-0';
+                    spanTs.textContent = '[' + ts + ']';
+                    
+                    const spanBody = document.createElement('span');
+                    spanBody.textContent = data.body;
+                    
+                    div.appendChild(spanTs);
+                    div.appendChild(spanBody);
+                    
+                    // Remove initial message
+                    if (output.children.length === 1 && output.children[0].classList.contains('italic')) {
+                        output.innerHTML = '';
+                    }
+
+                    output.appendChild(div);
+                    if(document.getElementById('auto-scroll').checked) {
+                        output.scrollTop = output.scrollHeight;
+                    }
+                    while (output.children.length > 3000) {
+                        output.removeChild(output.firstChild);
+                    }
+                } catch(err) {}
+            }
+        });
+    </script>
+</div>
