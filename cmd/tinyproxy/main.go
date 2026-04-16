@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,25 +25,29 @@ import (
 	"tinyproxy/internal/server/botdetect"
 	"tinyproxy/internal/server/compression"
 	"tinyproxy/internal/server/config"
+	"tinyproxy/internal/server/fingerprint"
 	"tinyproxy/internal/server/proxy"
 	"tinyproxy/internal/server/security"
 	"tinyproxy/internal/server/security/certmanager"
 )
 
-// peekedConn replays a single already-read byte before delegating to the real connection.
-type peekedConn struct {
+// fingerprintConn replays buffered bytes before delegating reads to the underlying conn.
+// For TLS connections it holds the full ClientHello record so that both the TLS
+// handshake and the fingerprint computation receive the same bytes.
+type fingerprintConn struct {
 	net.Conn
-	b    []byte
-	done bool
+	buf []byte
+	pos int
+	fp  fingerprint.Fingerprints
 }
 
-func (c *peekedConn) Read(buf []byte) (int, error) {
-	if !c.done && len(c.b) > 0 {
-		c.done = true
-		n := copy(buf, c.b)
+func (c *fingerprintConn) Read(b []byte) (int, error) {
+	if c.pos < len(c.buf) {
+		n := copy(b, c.buf[c.pos:])
+		c.pos += n
 		return n, nil
 	}
-	return c.Conn.Read(buf)
+	return c.Conn.Read(b)
 }
 
 // sniffingListener accepts TCP connections and dispatches them based on the first byte:
@@ -58,24 +64,45 @@ func (l *sniffingListener) Accept() (net.Conn, error) {
 			return nil, err
 		}
 
-		b := make([]byte, 1)
+		// Read the 5-byte TLS record header.
+		hdr := make([]byte, 5)
 		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, err = conn.Read(b)
+		_, err = io.ReadFull(conn, hdr)
 		conn.SetReadDeadline(time.Time{})
 		if err != nil {
 			conn.Close()
 			continue
 		}
 
-		peeked := &peekedConn{Conn: conn, b: b}
-
-		if b[0] == 0x16 {
-			return tls.Server(peeked, l.tlsCfg), nil
+		if hdr[0] != 0x16 {
+			// Plain HTTP — send redirect and loop.
+			fmt.Fprint(conn, "HTTP/1.1 301 Moved Permanently\r\nLocation: https://localhost:8080\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+			conn.Close()
+			continue
 		}
 
-		// Plain HTTP — send a redirect and loop to accept the next connection.
-		fmt.Fprint(peeked, "HTTP/1.1 301 Moved Permanently\r\nLocation: https://localhost:8080\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-		peeked.Close()
+		// TLS — read the rest of the record body.
+		recordLen := int(binary.BigEndian.Uint16(hdr[3:5]))
+		if recordLen > 16384 { // max TLS record size
+			conn.Close()
+			continue
+		}
+		body := make([]byte, recordLen)
+		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, err = io.ReadFull(conn, body)
+		conn.SetReadDeadline(time.Time{})
+		if err != nil {
+			conn.Close()
+			continue
+		}
+
+		buf := append(hdr, body...)
+		fc := &fingerprintConn{
+			Conn: conn,
+			buf:  buf,
+			fp:   fingerprint.Compute(buf),
+		}
+		return tls.Server(fc, l.tlsCfg), nil
 	}
 }
 
@@ -334,7 +361,17 @@ func runServer() {
 		}
 	}()
 
-	server := &http.Server{Handler: handler}
+	server := &http.Server{
+		Handler: handler,
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			if tc, ok := c.(*tls.Conn); ok {
+				if fc, ok := tc.NetConn().(*fingerprintConn); ok {
+					return fingerprint.WithFingerprints(ctx, fc.fp)
+				}
+			}
+			return ctx
+		},
+	}
 
 	if os.Getenv("ENV") == "dev" {
 		tlsCfg := security.SecureTLSConfig()
