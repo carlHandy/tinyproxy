@@ -82,7 +82,9 @@ func (d *DB) RunBatchWriter(ctx context.Context, ch <-chan RequestRecord) {
 			}
 		case <-ctx.Done():
 			if len(batch) > 0 {
-				d.writeBatch(batch)
+				if err := d.writeBatch(batch); err != nil {
+					log.Printf("dashboard: stats final batch write error: %v", err)
+				}
 			}
 			return
 		}
