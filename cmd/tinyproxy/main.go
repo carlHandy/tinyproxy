@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,25 +25,32 @@ import (
 	"tinyproxy/internal/server/botdetect"
 	"tinyproxy/internal/server/compression"
 	"tinyproxy/internal/server/config"
+	"tinyproxy/internal/server/fingerprint"
 	"tinyproxy/internal/server/proxy"
 	"tinyproxy/internal/server/security"
 	"tinyproxy/internal/server/security/certmanager"
 )
 
-// peekedConn replays a single already-read byte before delegating to the real connection.
-type peekedConn struct {
+// maxTLSRecordBody is the maximum TLS record payload size per RFC 5246 §6.2.1.
+const maxTLSRecordBody = 16384
+
+// fingerprintConn replays buffered bytes before delegating reads to the underlying conn.
+// For TLS connections it holds the full ClientHello record so that both the TLS
+// handshake and the fingerprint computation receive the same bytes.
+type fingerprintConn struct {
 	net.Conn
-	b    []byte
-	done bool
+	buf []byte
+	pos int
+	fp  fingerprint.Fingerprints
 }
 
-func (c *peekedConn) Read(buf []byte) (int, error) {
-	if !c.done && len(c.b) > 0 {
-		c.done = true
-		n := copy(buf, c.b)
+func (c *fingerprintConn) Read(b []byte) (int, error) {
+	if c.pos < len(c.buf) {
+		n := copy(b, c.buf[c.pos:])
+		c.pos += n
 		return n, nil
 	}
-	return c.Conn.Read(buf)
+	return c.Conn.Read(b)
 }
 
 // sniffingListener accepts TCP connections and dispatches them based on the first byte:
@@ -58,24 +67,49 @@ func (l *sniffingListener) Accept() (net.Conn, error) {
 			return nil, err
 		}
 
-		b := make([]byte, 1)
+		// Read the 5-byte TLS record header.
+		hdr := make([]byte, 5)
 		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-		_, err = conn.Read(b)
+		_, err = io.ReadFull(conn, hdr)
 		conn.SetReadDeadline(time.Time{})
 		if err != nil {
+			log.Printf("fingerprint: failed to read TLS header from %s: %v", conn.RemoteAddr(), err)
 			conn.Close()
 			continue
 		}
 
-		peeked := &peekedConn{Conn: conn, b: b}
-
-		if b[0] == 0x16 {
-			return tls.Server(peeked, l.tlsCfg), nil
+		if hdr[0] != 0x16 {
+			// Plain HTTP — send redirect and loop.
+			fmt.Fprint(conn, "HTTP/1.1 301 Moved Permanently\r\nLocation: https://localhost:8080\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+			conn.Close()
+			continue
 		}
 
-		// Plain HTTP — send a redirect and loop to accept the next connection.
-		fmt.Fprint(peeked, "HTTP/1.1 301 Moved Permanently\r\nLocation: https://localhost:8080\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-		peeked.Close()
+		// TLS — read the rest of the record body.
+		recordLen := int(binary.BigEndian.Uint16(hdr[3:5]))
+		if recordLen > maxTLSRecordBody {
+			conn.Close()
+			continue
+		}
+		body := make([]byte, recordLen)
+		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		_, err = io.ReadFull(conn, body)
+		conn.SetReadDeadline(time.Time{})
+		if err != nil {
+			log.Printf("fingerprint: failed to read TLS record body from %s: %v", conn.RemoteAddr(), err)
+			conn.Close()
+			continue
+		}
+
+		buf := make([]byte, 5+recordLen)
+		copy(buf, hdr)
+		copy(buf[5:], body)
+		fc := &fingerprintConn{
+			Conn: conn,
+			buf:  buf,
+			fp:   fingerprint.Compute(buf),
+		}
+		return tls.Server(fc, l.tlsCfg), nil
 	}
 }
 
@@ -85,6 +119,7 @@ func (l *sniffingListener) Addr() net.Addr { return l.inner.Addr() }
 type VHostHandler struct {
 	mu        sync.RWMutex
 	config    *config.ServerConfig
+	blocklist map[string]struct{}
 	caches    map[string]*cache.Cache
 	balancers map[string]*loadbalancer.LoadBalancer
 }
@@ -141,6 +176,7 @@ func (vh *VHostHandler) reload(configPath string) error {
 func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	vh.mu.RLock()
 	cfg := vh.config
+	bl := vh.blocklist
 	caches := vh.caches
 	balancers := vh.balancers
 	vh.mu.RUnlock()
@@ -149,6 +185,13 @@ func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	vhost, exists := cfg.VHosts[host]
 	if !exists {
 		vhost = cfg.VHosts["default"]
+	}
+
+	fp := fingerprint.FromContext(r.Context())
+	if fingerprint.IsBlocked(bl, fp) {
+		log.Printf("BLOCKING TLS fingerprint: %s %s JA3=%s JA4=%s", r.Method, r.URL.Path, fp.JA3, fp.JA4)
+		botdetect.Block(w, r, vhost.BotProtection.Honeypot)
+		return
 	}
 
 	botCfg := botdetect.BotConfig{
@@ -162,6 +205,9 @@ func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		vh.setSecurityHeaders(w, vhost)
+		if fp.JA3 != "" {
+			log.Printf("%s %s JA3=%s JA4=%s", r.Method, r.URL.Path, fp.JA3, fp.JA4)
+		}
 
 		if !exists {
 			vh.handleDefaultVHost(w, r)
@@ -289,6 +335,25 @@ func configPath() string {
 	return "/etc/go-tinyproxy/vhosts.conf"
 }
 
+// fingerprintsPath returns the active fingerprints config path: local first, then system.
+func fingerprintsPath() string {
+	if _, err := os.Stat("config/fingerprints.conf"); err == nil {
+		return "config/fingerprints.conf"
+	}
+	return "/etc/go-tinyproxy/fingerprints.conf"
+}
+
+// loadFingerprintBlocklist loads config/fingerprints.conf (or system path).
+// Returns an empty blocklist without error if the file does not exist.
+func loadFingerprintBlocklist(path string) map[string]struct{} {
+	f, err := os.Open(path)
+	if err != nil {
+		return make(map[string]struct{})
+	}
+	defer f.Close()
+	return fingerprint.LoadBlocklist(f)
+}
+
 func loadConfig(path string) (*config.ServerConfig, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -320,6 +385,7 @@ func runServer() {
 
 	handler := &VHostHandler{config: cfg}
 	handler.initSubsystems()
+	handler.blocklist = loadFingerprintBlocklist(fingerprintsPath())
 
 	// SIGHUP → reload config without restarting
 	sigs := make(chan os.Signal, 1)
@@ -331,10 +397,23 @@ func runServer() {
 			} else {
 				log.Println("config reloaded")
 			}
+			handler.mu.Lock()
+			handler.blocklist = loadFingerprintBlocklist(fingerprintsPath())
+			handler.mu.Unlock()
 		}
 	}()
 
-	server := &http.Server{Handler: handler}
+	server := &http.Server{
+		Handler: handler,
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			if tc, ok := c.(*tls.Conn); ok {
+				if fc, ok := tc.NetConn().(*fingerprintConn); ok {
+					return fingerprint.WithFingerprints(ctx, fc.fp)
+				}
+			}
+			return ctx
+		},
+	}
 
 	if os.Getenv("ENV") == "dev" {
 		tlsCfg := security.SecureTLSConfig()

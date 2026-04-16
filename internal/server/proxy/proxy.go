@@ -8,7 +8,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"time"
- 
+	"tinyproxy/internal/server/fingerprint"
+
 	"golang.org/x/net/proxy"
 )
  
@@ -53,6 +54,10 @@ func NewReverseProxy(vhosts []VHost) (*ReverseProxy, error) {
 			req.Header.Set("X-Forwarded-Proto", schemeFromRequest(req))
 			if ip, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
 				req.Header.Set("X-Real-IP", ip)
+			}
+			if fp := fingerprint.FromContext(req.Context()); fp.JA3 != "" {
+				req.Header.Set("X-JA3-Fingerprint", fp.JA3)
+				req.Header.Set("X-JA4-Fingerprint", fp.JA4)
 			}
 		}
  
@@ -167,6 +172,10 @@ func NewSingleBackendProxy(targetURL string) (http.Handler, error) {
 		req.Header.Set("X-Forwarded-Proto", schemeFromRequest(req))
 		if ip, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
 			req.Header.Set("X-Real-IP", ip)
+		}
+		if fp := fingerprint.FromContext(req.Context()); fp.JA3 != "" {
+			req.Header.Set("X-JA3-Fingerprint", fp.JA3)
+			req.Header.Set("X-JA4-Fingerprint", fp.JA4)
 		}
 	}
 
