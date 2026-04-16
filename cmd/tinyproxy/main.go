@@ -181,16 +181,16 @@ func (vh *VHostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	balancers := vh.balancers
 	vh.mu.RUnlock()
 
-	fp := fingerprint.FromContext(r.Context())
-	if fingerprint.IsBlocked(bl, fp) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-
 	host := r.Host
 	vhost, exists := cfg.VHosts[host]
 	if !exists {
 		vhost = cfg.VHosts["default"]
+	}
+
+	fp := fingerprint.FromContext(r.Context())
+	if fingerprint.IsBlocked(bl, fp) {
+		botdetect.Block(w, r, vhost.BotProtection.Honeypot)
+		return
 	}
 
 	botCfg := botdetect.BotConfig{

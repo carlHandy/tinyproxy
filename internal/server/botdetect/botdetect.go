@@ -37,7 +37,7 @@ func BotDetect(cfg BotConfig) func(http.Handler) http.Handler {
 
 			// Block by User-Agent.
 			if isKnownBot(ua) || containsAny(ua, cfg.BlockedAgents) {
-				block(w, r, cfg.Honeypot)
+				Block(w, r, cfg.Honeypot)
 				return
 			}
 
@@ -51,12 +51,12 @@ func BotDetect(cfg BotConfig) func(http.Handler) http.Handler {
 				rawPath = r.URL.Path
 			}
 			if cfg.BlockScanners && isSuspiciousPath(rawPath) {
-				block(w, r, cfg.Honeypot)
+				Block(w, r, cfg.Honeypot)
 				return
 			}
 
 			if isBlockedPath(rawPath, cfg.BlockedPaths) {
-				block(w, r, cfg.Honeypot)
+				Block(w, r, cfg.Honeypot)
 				return
 			}
 
@@ -65,8 +65,8 @@ func BotDetect(cfg BotConfig) func(http.Handler) http.Handler {
 	}
 }
 
-// block either serves a honeypot response or a plain 403.
-func block(w http.ResponseWriter, r *http.Request, honeypot bool) {
+// Block either serves a honeypot response or a plain 403.
+func Block(w http.ResponseWriter, r *http.Request, honeypot bool) {
 	if honeypot {
 		serveHoneypot(w, r)
 		return
