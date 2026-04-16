@@ -81,6 +81,15 @@ func (d *DB) RunBatchWriter(ctx context.Context, ch <-chan RequestRecord) {
 				batch = batch[:0]
 			}
 		case <-ctx.Done():
+			for {
+				select {
+				case r := <-ch:
+					batch = append(batch, r)
+				default:
+					goto done
+				}
+			}
+		done:
 			if len(batch) > 0 {
 				if err := d.writeBatch(batch); err != nil {
 					log.Printf("dashboard: stats final batch write error: %v", err)
@@ -247,6 +256,10 @@ func (d *DB) QueryLogs(before int64, limit int, vhost, level string) ([]LogLine,
 	if level != "" {
 		q += ` AND level = ?`
 		args = append(args, level)
+	}
+	if vhost != "" {
+		q += ` AND vhost = ?`
+		args = append(args, vhost)
 	}
 	q += ` ORDER BY ts DESC LIMIT ?`
 	args = append(args, limit)

@@ -263,7 +263,7 @@ func RegisterUIHandlers(mux *http.ServeMux, cfgPath string, db *stats.DB, sighup
 		})
 	})
 
-	mux.HandleFunc("/ui/config/validate", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/config/validate", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", 400)
 			return
@@ -282,7 +282,7 @@ func RegisterUIHandlers(mux *http.ServeMux, cfgPath string, db *stats.DB, sighup
 		})
 	})
 
-	mux.HandleFunc("/ui/config/save", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/config/save", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", 400)
 			return

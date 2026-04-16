@@ -25,8 +25,10 @@ func writeTempConfig(t *testing.T, content string) string {
 }
 
 const validConfig = `
-vhost default {
-    root static
+vhosts {
+    default {
+        root static
+    }
 }
 `
 

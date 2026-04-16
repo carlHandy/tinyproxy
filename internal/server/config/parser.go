@@ -52,81 +52,125 @@ func (p *Parser) parseVhosts() error {
     for p.scanner.Scan() {
         p.line++
         line := strings.TrimSpace(p.scanner.Text())
-        
+
         if line == "" || strings.HasPrefix(line, "#") {
             continue
         }
-        
+
         if line == "}" {
             return nil
         }
-        
+
         if strings.HasSuffix(line, "{") {
             domain := strings.TrimSpace(strings.TrimSuffix(line, "{"))
+            if domain == "" {
+                return fmt.Errorf("vhost block has no hostname")
+            }
             p.currentVHost = NewVirtualHost()
             p.currentVHost.Hostname = domain
-            
+
             if err := p.parseVHostBlock(); err != nil {
                 return err
             }
-            
+
             p.config.VHosts[domain] = p.currentVHost
+            continue
         }
+
+        return fmt.Errorf("unexpected token %q (expected vhost block or })", line)
     }
-    return nil
+    return fmt.Errorf("unexpected end of file: missing closing } for vhosts block")
 }
 
 func (p *Parser) parseVHostBlock() error {
     for p.scanner.Scan() {
         p.line++
         line := strings.TrimSpace(p.scanner.Text())
-        
+
         if line == "" || strings.HasPrefix(line, "#") {
             continue
         }
-        
+
         if line == "}" {
             return nil
         }
-        
+
         if err := p.parseLine(line); err != nil {
             return err
         }
     }
-    return nil
+    return fmt.Errorf("unexpected end of file: missing closing } for vhost %q", p.currentVHost.Hostname)
 }
 
 func (p *Parser) parseLine(line string) error {
     parts := strings.Fields(line)
-    if len(parts) < 2 {
+    if len(parts) == 0 {
         return nil
     }
 
     switch parts[0] {
     case "port":
+        if len(parts) < 2 {
+            return fmt.Errorf("port requires a value")
+        }
         port, err := strconv.Atoi(parts[1])
         if err != nil {
-            return err
+            return fmt.Errorf("invalid port %q: must be an integer", parts[1])
+        }
+        if port < 1 || port > 65535 {
+            return fmt.Errorf("invalid port %d: must be 1-65535", port)
         }
         p.currentVHost.Port = port
     case "proxy_pass":
+        if len(parts) < 2 {
+            return fmt.Errorf("proxy_pass requires a URL")
+        }
+        if p.currentVHost.Root != "" {
+            return fmt.Errorf("proxy_pass and root are mutually exclusive")
+        }
         p.currentVHost.ProxyPass = parts[1]
     case "root":
+        if len(parts) < 2 {
+            return fmt.Errorf("root requires a path")
+        }
+        if p.currentVHost.ProxyPass != "" {
+            return fmt.Errorf("root and proxy_pass are mutually exclusive")
+        }
         p.currentVHost.Root = parts[1]
-    case "ssl":
-        return p.parseSSL()
-    case "security":
-        return p.parseSecurity()
-    case "socks5":
-        return p.parseSocks5()
-    case "fastcgi":
-        return p.parseFastCGI()
-    case "bot_protection":
-        return p.parseBotProtection()
-    case "cache":
-        return p.parseCache()
-    case "upstream":
-        return p.parseUpstream()
+    case "compression":
+        if len(parts) < 2 {
+            return fmt.Errorf("compression requires on or off")
+        }
+        switch parts[1] {
+        case "on":
+            p.currentVHost.Compression = true
+        case "off":
+            p.currentVHost.Compression = false
+        default:
+            return fmt.Errorf("invalid compression value %q: must be on or off", parts[1])
+        }
+    case "ssl", "security", "socks5", "fastcgi", "bot_protection", "cache", "upstream":
+        if len(parts) != 2 || parts[1] != "{" {
+            return fmt.Errorf("%q block must be opened with %q", parts[0], parts[0]+" {")
+        }
+        switch parts[0] {
+        case "ssl":
+            return p.parseSSL()
+        case "security":
+            return p.parseSecurity()
+        case "socks5":
+            return p.parseSocks5()
+        case "fastcgi":
+            return p.parseFastCGI()
+        case "bot_protection":
+            return p.parseBotProtection()
+        case "cache":
+            return p.parseCache()
+        case "upstream":
+            return p.parseUpstream()
+        }
+    default:
+        return fmt.Errorf("unknown directive %q", parts[0])
     }
 
     return nil
@@ -157,9 +201,11 @@ func (p *Parser) parseFastCGI() error {
             if len(parts) >= 3 {
                 p.currentVHost.FastCGI.Params[parts[1]] = parts[2]
             }
+        default:
+            return fmt.Errorf("unknown fastcgi directive %q", parts[0])
         }
     }
-    return nil
+    return fmt.Errorf("unexpected end of file: missing closing } for fastcgi block")
 }
 
 func (p *Parser) parseSSL() error {
@@ -183,9 +229,11 @@ func (p *Parser) parseSSL() error {
         case "key":
             p.currentVHost.KeyFile = parts[1]
             p.currentVHost.SSL = true
+        default:
+            return fmt.Errorf("unknown ssl directive %q", parts[0])
         }
     }
-    return nil
+    return fmt.Errorf("unexpected end of file: missing closing } for ssl block")
 }
 
 func (p *Parser) parseSecurity() error {
@@ -197,14 +245,11 @@ func (p *Parser) parseSecurity() error {
             return nil
         }
         
-        if strings.HasSuffix(line, "{") {
-            directive := strings.TrimSpace(strings.TrimSuffix(line, "{"))
-            if directive == "rate_limit" {
-                if err := p.parseRateLimit(); err != nil {
-                    return err
-                }
-                continue
+        if line == "rate_limit {" {
+            if err := p.parseRateLimit(); err != nil {
+                return err
             }
+            continue
         }
         
         parts := strings.Fields(line)
@@ -214,8 +259,16 @@ func (p *Parser) parseSecurity() error {
         
         switch parts[0] {
         case "frame_options":
+            switch parts[1] {
+            case "SAMEORIGIN", "DENY", "ALLOWALL":
+            default:
+                return fmt.Errorf("invalid frame_options value %q: must be SAMEORIGIN, DENY, or ALLOWALL", parts[1])
+            }
             p.currentVHost.Security.Headers.FrameOptions = parts[1]
         case "content_type":
+            if parts[1] != "nosniff" {
+                return fmt.Errorf("invalid content_type value %q: must be nosniff", parts[1])
+            }
             p.currentVHost.Security.Headers.ContentType = parts[1]
         case "xss_protection":
             p.currentVHost.Security.Headers.XSSProtection = strings.Join(parts[1:], " ")
@@ -223,9 +276,11 @@ func (p *Parser) parseSecurity() error {
             p.currentVHost.Security.Headers.CSP = strings.Join(parts[1:], " ")
         case "hsts":
             p.currentVHost.Security.Headers.HSTS = strings.Join(parts[1:], " ")
+        default:
+            return fmt.Errorf("unknown security directive %q", parts[0])
         }
     }
-    return nil
+    return fmt.Errorf("unexpected end of file: missing closing } for security block")
 }
 
 func (p *Parser) parseRateLimit() error {
@@ -246,20 +301,23 @@ func (p *Parser) parseRateLimit() error {
         case "requests":
             requests, err := strconv.Atoi(parts[1])
             if err != nil {
-                return err
+                return fmt.Errorf("invalid rate_limit requests %q: must be an integer", parts[1])
+            }
+            if requests < 0 {
+                return fmt.Errorf("rate_limit requests must be >= 0")
             }
             p.currentVHost.Security.RateLimit.Requests = requests
         case "window":
             window, err := time.ParseDuration(parts[1])
             if err != nil {
-                return err
+                return fmt.Errorf("invalid rate_limit window %q: %w", parts[1], err)
             }
             p.currentVHost.Security.RateLimit.Window = window
-        case "enabled":
-            p.currentVHost.Security.RateLimit.Enabled = p.currentVHost.Security.RateLimit.Requests != 0
+        default:
+            return fmt.Errorf("unknown rate_limit directive %q", parts[0])
         }
     }
-    return nil
+    return fmt.Errorf("unexpected end of file: missing closing } for rate_limit block")
 }
 
 func (p *Parser) parseBotProtection() error {
@@ -280,12 +338,19 @@ func (p *Parser) parseBotProtection() error {
         }
 
         switch parts[0] {
-        case "enabled":
-            p.currentVHost.BotProtection.Enabled = parts[1] == "true"
-        case "block_scanners":
-            p.currentVHost.BotProtection.BlockScanners = parts[1] == "true"
-        case "honeypot":
-            p.currentVHost.BotProtection.Honeypot = parts[1] == "true"
+        case "enabled", "block_scanners", "honeypot":
+            if parts[1] != "true" && parts[1] != "false" {
+                return fmt.Errorf("invalid boolean value %q for %q (must be true or false)", parts[1], parts[0])
+            }
+            val := parts[1] == "true"
+            switch parts[0] {
+            case "enabled":
+                p.currentVHost.BotProtection.Enabled = val
+            case "block_scanners":
+                p.currentVHost.BotProtection.BlockScanners = val
+            case "honeypot":
+                p.currentVHost.BotProtection.Honeypot = val
+            }
         case "block":
             p.currentVHost.BotProtection.BlockedAgents = append(
                 p.currentVHost.BotProtection.BlockedAgents, parts[1])
@@ -295,9 +360,11 @@ func (p *Parser) parseBotProtection() error {
         case "allow":
             p.currentVHost.BotProtection.AllowedAgents = append(
                 p.currentVHost.BotProtection.AllowedAgents, parts[1])
+        default:
+            return fmt.Errorf("unknown bot_protection directive %q", parts[0])
         }
     }
-    return nil
+    return fmt.Errorf("unexpected end of file: missing closing } for bot_protection block")
 }
 
 func (p *Parser) parseSocks5() error {
@@ -316,6 +383,9 @@ func (p *Parser) parseSocks5() error {
         
         switch parts[0] {
         case "enabled":
+            if parts[1] != "true" && parts[1] != "false" {
+                return fmt.Errorf("invalid boolean value %q for socks5 enabled", parts[1])
+            }
             p.currentVHost.SOCKS5.Enabled = parts[1] == "true"
         case "address":
             p.currentVHost.SOCKS5.Address = parts[1]
@@ -323,9 +393,11 @@ func (p *Parser) parseSocks5() error {
             p.currentVHost.SOCKS5.Username = parts[1]
         case "password":
             p.currentVHost.SOCKS5.Password = parts[1]
+        default:
+            return fmt.Errorf("unknown socks5 directive %q", parts[0])
         }
     }
-    return nil
+    return fmt.Errorf("unexpected end of file: missing closing } for socks5 block")
 }
 
 func (p *Parser) parseCache() error {
@@ -347,6 +419,9 @@ func (p *Parser) parseCache() error {
 
         switch parts[0] {
         case "enabled":
+            if parts[1] != "true" && parts[1] != "false" {
+                return fmt.Errorf("invalid boolean value %q for cache enabled", parts[1])
+            }
             p.currentVHost.Cache.Enabled = parts[1] == "true"
         case "max_size":
             size, err := parseByteSize(parts[1])
@@ -368,9 +443,11 @@ func (p *Parser) parseCache() error {
                 return fmt.Errorf("cache stale_while_revalidate: %w", err)
             }
             p.currentVHost.Cache.StaleWhileRevalidate = d
+        default:
+            return fmt.Errorf("unknown cache directive %q", parts[0])
         }
     }
-    return nil
+    return fmt.Errorf("unexpected end of file: missing closing } for cache block")
 }
 
 func (p *Parser) parseUpstream() error {
@@ -385,14 +462,11 @@ func (p *Parser) parseUpstream() error {
             return nil
         }
 
-        if strings.HasSuffix(line, "{") {
-            directive := strings.TrimSpace(strings.TrimSuffix(line, "{"))
-            if directive == "health_check" {
-                if err := p.parseHealthCheck(); err != nil {
-                    return err
-                }
-                continue
+        if line == "health_check {" {
+            if err := p.parseHealthCheck(); err != nil {
+                return err
             }
+            continue
         }
 
         parts := strings.Fields(line)
@@ -402,6 +476,9 @@ func (p *Parser) parseUpstream() error {
 
         switch parts[0] {
         case "strategy":
+            if !validStrategies[parts[1]] {
+                return fmt.Errorf("unknown upstream strategy %q: must be round_robin, least_conn, ip_hash, weighted, or cookie", parts[1])
+            }
             p.currentVHost.Upstream.Strategy = parts[1]
         case "cookie_name":
             p.currentVHost.Upstream.CookieName = parts[1]
@@ -410,7 +487,6 @@ func (p *Parser) parseUpstream() error {
                 URL:    parts[1],
                 Weight: 1,
             }
-            // Parse optional "weight N"
             for i := 2; i < len(parts)-1; i++ {
                 if parts[i] == "weight" {
                     w, err := strconv.Atoi(parts[i+1])
@@ -421,9 +497,11 @@ func (p *Parser) parseUpstream() error {
                 }
             }
             p.currentVHost.Upstream.Backends = append(p.currentVHost.Upstream.Backends, bc)
+        default:
+            return fmt.Errorf("unknown upstream directive %q", parts[0])
         }
     }
-    return nil
+    return fmt.Errorf("unexpected end of file: missing closing } for upstream block")
 }
 
 func (p *Parser) parseHealthCheck() error {
@@ -472,9 +550,11 @@ func (p *Parser) parseHealthCheck() error {
                 return fmt.Errorf("health_check pass_threshold: %w", err)
             }
             p.currentVHost.Upstream.HealthCheck.PassThreshold = n
+        default:
+            return fmt.Errorf("unknown health_check directive %q", parts[0])
         }
     }
-    return nil
+    return fmt.Errorf("unexpected end of file: missing closing } for health_check block")
 }
 
 // parseByteSize parses human-readable byte sizes like "256MB", "1GB", "512KB".
