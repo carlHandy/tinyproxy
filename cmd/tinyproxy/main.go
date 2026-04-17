@@ -427,9 +427,11 @@ func runServer() {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	var dc DashboardConfig
 	registerDashboardFlags(fs, &dc)
-	if len(os.Args) > 2 {
-		fs.Parse(os.Args[2:])
+	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "serve" {
+		args = args[1:]
 	}
+	fs.Parse(args)
 
 	path := configPath()
 	cfg, err := loadConfig(path)
@@ -739,7 +741,7 @@ func reloadAppConfig(vh *VHostHandler, path string) {
 
 func main() {
 	cmd := "serve"
-	if len(os.Args) > 1 {
+	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
 		cmd = os.Args[1]
 	}
 
