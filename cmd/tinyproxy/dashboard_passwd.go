@@ -13,16 +13,16 @@ import (
 // It prompts for a username and password (hidden), then prints a
 // username:hash line ready to paste into a credentials file.
 func runDashboardPasswd() {
-	fmt.Print("Username: ")
+	fmt.Fprint(os.Stderr, "Username: ")
 	var username string
 	fmt.Scanln(&username)
 	if username == "" {
 		log.Fatal("username cannot be empty")
 	}
 
-	fmt.Print("Password: ")
+	fmt.Fprint(os.Stderr, "Password: ")
 	pw, err := term.ReadPassword(int(os.Stdin.Fd()))
-	fmt.Println()
+	fmt.Fprintln(os.Stderr)
 	if err != nil {
 		log.Fatalf("failed to read password: %v", err)
 	}
