@@ -773,9 +773,9 @@ func main() {
 		}
 		switch sub {
 		case "passwd":
-			runDashboardPasswd()
+			runDashboardPasswd(os.Args[3:])
 		default:
-			fmt.Fprintf(os.Stderr, "Usage: go-tinyproxy dashboard passwd\n")
+			fmt.Fprintf(os.Stderr, "Usage: go-tinyproxy dashboard passwd [--output <file>]\n")
 			os.Exit(1)
 		}
 	default:

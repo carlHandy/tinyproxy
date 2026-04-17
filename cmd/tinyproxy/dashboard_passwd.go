@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -10,9 +11,12 @@ import (
 )
 
 // runDashboardPasswd is an interactive bcrypt credential generator.
-// It prompts for a username and password (hidden), then prints a
-// username:hash line ready to paste into a credentials file.
-func runDashboardPasswd() {
+// With --output <file> it writes the username:hash line directly to the file.
+func runDashboardPasswd(args []string) {
+	fs := flag.NewFlagSet("dashboard passwd", flag.ExitOnError)
+	output := fs.String("output", "", "write credential line to this file instead of stdout")
+	fs.Parse(args)
+
 	fmt.Fprint(os.Stderr, "Username: ")
 	var username string
 	fmt.Scanln(&username)
@@ -34,5 +38,15 @@ func runDashboardPasswd() {
 	if err != nil {
 		log.Fatalf("failed to hash password: %v", err)
 	}
-	fmt.Printf("%s:%s\n", username, hash)
+
+	line := fmt.Sprintf("%s:%s\n", username, hash)
+
+	if *output != "" {
+		if err := os.WriteFile(*output, []byte(line), 0600); err != nil {
+			log.Fatalf("failed to write credentials file: %v", err)
+		}
+		fmt.Fprintf(os.Stderr, "Credentials written to %s\n", *output)
+		return
+	}
+	fmt.Print(line)
 }
