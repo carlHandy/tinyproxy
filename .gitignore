@@ -1,5 +1,5 @@
 certs/localhost+2.pem
 certs/localhost+2-key.pem
-tinyproxy
+/tinyproxy
 .aider.*
 .aider.worktrees/
