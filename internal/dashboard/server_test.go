@@ -66,11 +66,12 @@ func TestRateLimiterBlocks(t *testing.T) {
 	rl := dashboard.NewAuthLimiter(3)
 	ip := "10.0.0.1"
 	for i := 0; i < 3; i++ {
-		if !rl.Allow(ip) {
-			t.Fatalf("expected allow on attempt %d", i+1)
+		if rl.IsBlocked(ip) {
+			t.Fatalf("expected not blocked on attempt %d", i+1)
 		}
+		rl.RecordFailure(ip)
 	}
-	if rl.Allow(ip) {
+	if !rl.IsBlocked(ip) {
 		t.Fatal("expected block after 3 failures")
 	}
 }

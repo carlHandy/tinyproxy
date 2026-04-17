@@ -42,12 +42,13 @@ func NewAuthMiddleware(username string, hash []byte) *AuthMiddleware {
 func (a *AuthMiddleware) Wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := remoteIP(r)
-		if !a.limiter.Allow(ip) {
+		if a.limiter.IsBlocked(ip) {
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 			return
 		}
 		user, pass, ok := r.BasicAuth()
 		if !ok || user != a.username || bcrypt.CompareHashAndPassword(a.hash, []byte(pass)) != nil {
+			a.limiter.RecordFailure(ip)
 			w.Header().Set("WWW-Authenticate", `Basic realm="tinyproxy dashboard"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
@@ -81,8 +82,8 @@ func NewAuthLimiter(max int) *AuthLimiter {
 	}
 }
 
-// Allow records a failed attempt for ip and returns false if the limit is exceeded.
-func (l *AuthLimiter) Allow(ip string) bool {
+// IsBlocked returns true if ip has exceeded the failure limit.
+func (l *AuthLimiter) IsBlocked(ip string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := time.Now()
@@ -92,12 +93,15 @@ func (l *AuthLimiter) Allow(ip string) bool {
 	for ; i < len(hits) && hits[i].Before(cutoff); i++ {
 	}
 	hits = hits[i:]
-	if len(hits) >= l.max {
-		l.hits[ip] = hits
-		return false
-	}
-	l.hits[ip] = append(hits, now)
-	return true
+	l.hits[ip] = hits
+	return len(hits) >= l.max
+}
+
+// RecordFailure records a failed auth attempt for ip.
+func (l *AuthLimiter) RecordFailure(ip string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.hits[ip] = append(l.hits[ip], time.Now())
 }
 
 // NewStatsHandler returns an http.Handler for GET /api/stats.
