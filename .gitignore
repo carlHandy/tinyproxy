@@ -3,3 +3,5 @@ certs/localhost+2-key.pem
 /tinyproxy
 .aider.*
 .aider.worktrees/
+/dashboard.db
+/dashboard.log
