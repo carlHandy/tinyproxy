@@ -4,5 +4,5 @@ certs/localhost+2-key.pem
 .aider.*
 .aider.worktrees/
 dashboard.db
-/dashboard.log
+dashboard.log
 dist/
