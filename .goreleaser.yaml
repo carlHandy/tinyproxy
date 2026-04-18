@@ -50,5 +50,31 @@ archives:
     # Use zip for Windows
     format_overrides:
       - goos: windows
-        formats: 
+        formats:
           - zip
+
+dockers_v2:
+  - dockerfile: Dockerfile.goreleaser
+    images:
+      - "kalpadev/tinyproxy"
+    tags:
+      - "{{ .Version }}"
+      - "latest"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    extra_files:
+      - docker/vhosts.default.conf
+      - config/fingerprints.conf
+      - static/
+
+sboms:
+  - artifacts: binary
+
+docker_signs:
+  - cmd: cosign
+    args:
+      - sign
+      - "--yes"
+      - "${artifact}@${digest}"
+    artifacts: docker
