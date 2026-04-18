@@ -22,7 +22,7 @@ go-tinyproxy upgrade    # Upgrade to the latest release
 go-tinyproxy ssl regenerate  # Clear cert cache and force renewal on next start
 ```
 
-> The dashboard is not a standalone subcommand. Enable it by passing `--enable-dashboard` and related flags to `go-tinyproxy serve`. See the [Admin Dashboard](../features/dashboard) page for details.
+> The dashboard is not a standalone subcommand. Enable it by passing `--enable-dashboard` and related flags to `go-tinyproxy serve`. See the [Admin Dashboard](./features/dashboard) page for details.
 
 ### Manual Service Management
 
