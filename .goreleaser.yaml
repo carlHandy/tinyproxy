@@ -90,3 +90,14 @@ docker_manifests:
     image_templates:
       - "kalpadev/tinyproxy:{{ .Version }}-amd64"
       - "kalpadev/tinyproxy:{{ .Version }}-arm64"
+
+sboms:
+  - artifacts: binary
+
+docker_signs:
+  - cmd: cosign
+    args:
+      - sign
+      - "--yes"
+      - "${artifact}@${digest}"
+    artifacts: all
