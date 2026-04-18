@@ -183,8 +183,69 @@ Tag push
 
 ---
 
+## Image Signing & SBOM Attestation
+
+Implemented via [Sigstore](https://sigstore.dev) cosign **keyless signing** — no key pairs to manage. The GitHub Actions OIDC token is used as the signing identity, and signatures are recorded in Sigstore's public transparency log (Rekor).
+
+### What gets signed / attested
+
+| Artifact | How |
+|----------|-----|
+| Docker images (both arch-specific and manifests) | `cosign sign` |
+| SBOM documents (CycloneDX JSON, one per binary) | Attached to GitHub Release by GoReleaser |
+| Docker image SBOM attestation | `cosign attest` with CycloneDX predicate |
+
+### GoReleaser additions
+
+**`sboms:` block** — generates a CycloneDX SBOM for each binary artifact and attaches it to the GitHub Release:
+
+```yaml
+sboms:
+  - artifacts: binary
+    documents:
+      - "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}.sbom.json"
+```
+
+**`docker_signs:` block** — signs every pushed image and manifest using cosign keyless:
+
+```yaml
+docker_signs:
+  - cmd: cosign
+    args:
+      - sign
+      - "--yes"
+      - "${artifact}@${digest}"
+    artifacts: all
+```
+
+### `.github/workflows/release.yml` additions
+
+One new step (before GoReleaser):
+
+```yaml
+- name: Install cosign
+  uses: sigstore/cosign-installer@v3
+```
+
+Updated `permissions` block (add `id-token: write` for OIDC keyless signing):
+
+```yaml
+permissions:
+  contents: write
+  id-token: write
+```
+
+### Verification (end-users)
+
+```bash
+cosign verify kalpadev/tinyproxy:v1.2.0 \
+  --certificate-identity-regexp "https://github.com/carlHandy/go-tinyproxy" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+```
+
+---
+
 ## Out of scope
 
 - A `docker-compose.yml` example (useful but a separate concern)
 - Automatic `latest` pinning to a non-release branch (only tags trigger releases)
-- Image signing / SBOM attestation (can be added later via GoReleaser's `signs:` block)
