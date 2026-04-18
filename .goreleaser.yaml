@@ -77,4 +77,4 @@ docker_signs:
       - sign
       - "--yes"
       - "${artifact}@${digest}"
-    artifacts: all
+    artifacts: docker
