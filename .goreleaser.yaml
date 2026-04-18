@@ -53,43 +53,20 @@ archives:
         formats:
           - zip
 
-dockers:
-  - image_templates:
-      - "kalpadev/tinyproxy:{{ .Version }}-amd64"
-    dockerfile: Dockerfile.goreleaser
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/amd64"
-    goarch: amd64
-    goos: linux
+dockers_v2:
+  - dockerfile: Dockerfile.goreleaser
+    images:
+      - "kalpadev/tinyproxy"
+    tags:
+      - "{{ .Version }}"
+      - "latest"
+    platforms:
+      - linux/amd64
+      - linux/arm64
     extra_files:
       - docker/vhosts.default.conf
       - config/fingerprints.conf
       - static/
-
-  - image_templates:
-      - "kalpadev/tinyproxy:{{ .Version }}-arm64"
-    dockerfile: Dockerfile.goreleaser
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/arm64"
-    goarch: arm64
-    goos: linux
-    extra_files:
-      - docker/vhosts.default.conf
-      - config/fingerprints.conf
-      - static/
-
-docker_manifests:
-  - name_template: "kalpadev/tinyproxy:{{ .Version }}"
-    image_templates:
-      - "kalpadev/tinyproxy:{{ .Version }}-amd64"
-      - "kalpadev/tinyproxy:{{ .Version }}-arm64"
-
-  - name_template: "kalpadev/tinyproxy:latest"
-    image_templates:
-      - "kalpadev/tinyproxy:{{ .Version }}-amd64"
-      - "kalpadev/tinyproxy:{{ .Version }}-arm64"
 
 sboms:
   - artifacts: binary
