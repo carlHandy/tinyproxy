@@ -1,5 +1,2 @@
 name = "tinyproxy-docs"
 pages_build_output_dir = "website/build"
-
-[build]
-command = "cd website && npm ci && npm run build"
