@@ -22,6 +22,7 @@ const sidebars = {
       type: 'category',
       label: 'Features',
       items: [
+        'features/automatic-tls',
         'features/bot-protection',
         'features/dashboard',
         'features/security',
