@@ -1,9 +1,10 @@
 module tinyproxy
 
-go 1.25.0
+go 1.26.2
 
 require (
 	github.com/andybalholm/brotli v1.1.1
+	github.com/nginxinc/nginx-go-crossplane v0.4.88
 	github.com/tomasen/fcgi_client v0.0.0-20180423082037-2bb3d819fd19
 	golang.org/x/crypto v0.48.0
 	golang.org/x/net v0.50.0
@@ -18,7 +19,6 @@ require (
 	github.com/jstemmer/go-junit-report v1.0.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
-	github.com/nginxinc/nginx-go-crossplane v0.4.88 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	golang.org/x/mod v0.33.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
