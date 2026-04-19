@@ -778,8 +778,10 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Usage: go-tinyproxy dashboard passwd [--output <file>]\n")
 			os.Exit(1)
 		}
+	case "migrate":
+		runMigrate(os.Args[2:])
 	default:
-		fmt.Fprintf(os.Stderr, "Usage: go-tinyproxy {serve|start|stop|restart|reload|status|config|logs|upgrade|ssl|dashboard}\n")
+		fmt.Fprintf(os.Stderr, "Usage: go-tinyproxy {serve|start|stop|restart|reload|status|config|logs|upgrade|ssl|dashboard|migrate}\n")
 		os.Exit(1)
 	}
 }
