@@ -6,3 +6,4 @@ certs/localhost+2-key.pem
 dashboard.db
 dashboard.log
 dist/
+docs/*
