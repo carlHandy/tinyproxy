@@ -68,6 +68,9 @@ dockers_v2:
       - config/fingerprints.conf
       - static/
 
+extra_files:
+  - glob: tools/nginx-migrate.py
+
 sboms:
   - artifacts: binary
 

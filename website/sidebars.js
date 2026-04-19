@@ -28,6 +28,15 @@ const sidebars = {
         'features/security',
       ],
     },
+    {
+      type: 'category',
+      label: 'Migration',
+      items: [
+        'migration/nginx',
+        'migration/nginx-directive-map',
+        'migration/nginx-gap-analysis',
+      ],
+    },
     'deployment',
     'development',
   ],
