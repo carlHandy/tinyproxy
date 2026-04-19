@@ -149,6 +149,15 @@ func (p *Parser) parseLine(line string) error {
         default:
             return fmt.Errorf("invalid compression value %q: must be on or off", parts[1])
         }
+    case "max_body_size":
+        if len(parts) < 2 {
+            return fmt.Errorf("max_body_size requires a value")
+        }
+        size, err := parseByteSize(parts[1])
+        if err != nil {
+            return fmt.Errorf("max_body_size: %w", err)
+        }
+        p.currentVHost.MaxBodySize = size
     case "ssl", "security", "socks5", "fastcgi", "bot_protection", "cache", "upstream":
         if len(parts) != 2 || parts[1] != "{" {
             return fmt.Errorf("%q block must be opened with %q", parts[0], parts[0]+" {")
