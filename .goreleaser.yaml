@@ -45,7 +45,7 @@ nfpms:
 
 # This packages Windows and macOS binaries into zip/tar files
 archives:
-  - formats: 
+  - formats:
       - tar.gz
     # Use zip for Windows
     format_overrides:
@@ -68,8 +68,10 @@ dockers_v2:
       - config/fingerprints.conf
       - static/
 
-extra_files:
-  - glob: tools/nginx-migrate.py
+# This ensures the script is uploaded as a standalone asset on your release page
+release:
+  extra_files:
+    - glob: tools/nginx-migrate.py
 
 sboms:
   - artifacts: binary
