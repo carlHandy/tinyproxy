@@ -630,7 +630,7 @@ func runUpgrade() {
 	switch {
 	case goos == "linux" && hasBin("dpkg"):
 		ext = "deb"
-		installFn = func(path string) { mustRun("dpkg", "-i", path) }
+		installFn = func(path string) { mustRun("dpkg", "--force-confold", "-i", path) }
 	case goos == "linux" && hasBin("rpm"):
 		ext = "rpm"
 		installFn = func(path string) { mustRun("rpm", "-U", path) }
